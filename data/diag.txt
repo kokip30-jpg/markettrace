@@ -1,0 +1,33 @@
+IP: 40.65.61.154
+== MarketTrace kokip30-jpg@users.noreply.github.com | https://www.sec.gov/files/company_tickers.json
+403
+ SEC.gov | Request Rate Threshold Exceeded html {height: 100%} body {height: 100%; margin:0; padding:0;} #header {background-color:#003
+== MarketTrace kokip30-jpg@users.noreply.github.com | https://data.sec.gov/submissions/CIK0001045810.json
+403
+ SEC.gov | Your Request Originates from an Undeclared Automated Tool html {height: 100%} body {height: 100%; margin:0; padding:0;} #hea
+== MarketTrace kokip30-jpg@users.noreply.github.com | https://efts.sec.gov/LATEST/search-index?q=%22NVIDIA%22
+403
+ SEC.gov | Your Request Originates from an Undeclared Automated Tool html {height: 100%} body {height: 100%; margin:0; padding:0;} #hea
+== Pavel Koki admin@masaze-tisnov.cz | https://www.sec.gov/files/company_tickers.json
+200
+{"0":{"cik_str":1045810,"ticker":"NVDA","title":"NVIDIA CORP"},"1":{"cik_str":320193,"ticker":"AAPL","title":"Apple Inc."},"2":{"cik_str":1652044,"ticker":"GOOGL","title":"Alphabet Inc."},"3":{"cik_str":789019,"ticker":"MSFT","title":"MICROSOFT CORP"},"4":{"cik_str":1018724,"ticker":"AMZN","title":"AMAZON COM INC"},"5":{"cik_str":1326801,"ticker":"META","title":"Meta Platforms, Inc."},"6":{"cik_st
+== Pavel Koki admin@masaze-tisnov.cz | https://data.sec.gov/submissions/CIK0001045810.json
+200
+{"cik":"0001045810","entityType":"operating","sic":"3674","sicDescription":"Semiconductors & Related Devices","ownerOrg":"04 Manufacturing","insiderTransactionForOwnerExists":1,"insiderTransactionForIssuerExists":1,"name":"NVIDIA CORP","tickers":["NVDA"],"exchanges":["Nasdaq"],"ein":"943177549","lei":null,"description":"","website":"","investorWebsite":"","category":"Large accelerated filer","fisc
+== Pavel Koki admin@masaze-tisnov.cz | https://efts.sec.gov/LATEST/search-index?q=%22NVIDIA%22
+200
+{"took":152,"timed_out":false,"_shards":{"total":50,"successful":50,"skipped":0,"failed":0},"hits":{"total":{"value":10000,"relation":"gte"},"max_score":9.647768,"hits":[{"_index":"edgar_file","_id":"0001921094-25-001247:primary_doc.xml","_score":9.647768,"_source":{"ciks":["0001045810","0001197649"],"period_ending":null,"file_num":["000-23985"],"display_names":["NVIDIA CORP (NVDA) (CIK 00010458
+== Sample Company Name AdminContact@samplecompany.com | https://www.sec.gov/files/company_tickers.json
+200
+{"0":{"cik_str":1045810,"ticker":"NVDA","title":"NVIDIA CORP"},"1":{"cik_str":320193,"ticker":"AAPL","title":"Apple Inc."},"2":{"cik_str":1652044,"ticker":"GOOGL","title":"Alphabet Inc."},"3":{"cik_str":789019,"ticker":"MSFT","title":"MICROSOFT CORP"},"4":{"cik_str":1018724,"ticker":"AMZN","title":"AMAZON COM INC"},"5":{"cik_str":1326801,"ticker":"META","title":"Meta Platforms, Inc."},"6":{"cik_st
+== Sample Company Name AdminContact@samplecompany.com | https://data.sec.gov/submissions/CIK0001045810.json
+200
+{"cik":"0001045810","entityType":"operating","sic":"3674","sicDescription":"Semiconductors & Related Devices","ownerOrg":"04 Manufacturing","insiderTransactionForOwnerExists":1,"insiderTransactionForIssuerExists":1,"name":"NVIDIA CORP","tickers":["NVDA"],"exchanges":["Nasdaq"],"ein":"943177549","lei":null,"description":"","website":"","investorWebsite":"","category":"Large accelerated filer","fisc
+== Sample Company Name AdminContact@samplecompany.com | https://efts.sec.gov/LATEST/search-index?q=%22NVIDIA%22
+200
+{"took":152,"timed_out":false,"_shards":{"total":50,"successful":50,"skipped":0,"failed":0},"hits":{"total":{"value":10000,"relation":"gte"},"max_score":9.647768,"hits":[{"_index":"edgar_file","_id":"0001921094-25-001247:primary_doc.xml","_score":9.647768,"_source":{"ciks":["0001045810","0001197649"],"period_ending":null,"file_num":["000-23985"],"display_names":["NVIDIA CORP (NVDA) (CIK 00010458
+== openinsider
+200
+<!doctype html> <html lang=en> <head> <script type="text/javascript" src="/js/sic.js" async></script> <meta charset=utf-8> <title>Latest Insider Purchases $25k - - OpenInsider</title> <meta name=vie
+== finnhub-like ok check github
+200
