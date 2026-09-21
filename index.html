@@ -448,7 +448,7 @@ function renderStatus(){
   if(!state.key){ dot.className = 'dot off'; txt.textContent = 'Chybí API klíč'; return; }
   if(!state.wsOpen){ dot.className = 'dot warn'; txt.textContent = 'Připojuji…'; return; }
   const m = state.market;
-  const sess = m && m.isOpen ? ({'pre-market':'předobchodní seance','regular':'trh otevřen','post-market':'poobchodní seance'}[m.session] || 'trh otevřen') : 'trh USA zavřen';
+  const sess = m && m.isOpen ? ({'pre-market':'předobchodní seance','regular':'trh otevřen','post-market':'poobchodní seance'}[m.session] || 'trh otevřen') : ('burza USA otevírá ' + openText(minsToOpen()).replace(/ \(.*\)/,''));
   dot.className = 'dot ' + (m && m.isOpen ? 'live' : '');
   txt.textContent = (m && m.isOpen ? 'Živě' : 'Připojeno') + ', ' + sess;
 }
@@ -636,12 +636,41 @@ function renderPrice(){
   renderMeta();
   document.title = `${sym} ${num(q.price)} ${pct(dp)} | MarketTrace`;
 }
+function nyNow(){
+  const p = Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/New_York',hour12:false,weekday:'short',hour:'2-digit',minute:'2-digit'}).formatToParts(new Date()).map(x => [x.type, x.value]));
+  return { wd: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'].indexOf(p.weekday), min: (+p.hour % 24) * 60 + (+p.minute) };
+}
+function minsToOpen(){
+  const OPEN = 570, CLOSE = 960; // 9:30 a 16:00 New York
+  let { wd, min } = nyNow();
+  const weekday = d => d >= 1 && d <= 5;
+  if(weekday(wd) && min < OPEN) return OPEN - min;
+  if(weekday(wd) && min < CLOSE && !(state.market && state.market.holiday)) return 0;
+  let m = 1440 - min; wd = (wd + 1) % 7;
+  while(!weekday(wd)){ m += 1440; wd = (wd + 1) % 7; }
+  return m + OPEN;
+}
+function openText(m){
+  const at = new Date(Date.now() + m * 60000);
+  const today = new Date(), tom = new Date(Date.now() + 864e5);
+  const time = at.toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'});
+  const day = at.toDateString() === today.toDateString() ? 'dnes' : at.toDateString() === tom.toDateString() ? 'zítra' : at.toLocaleDateString('cs-CZ', {weekday:'long'});
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `${day} v ${time} (za ${h ? h + ' h ' : ''}${mm} min)`;
+}
 function renderMeta(){
   const q = state.q[state.sel];
   if(!q || !ok(q.price)) return;
   const live = q.liveTs && Date.now() - q.liveTs < 60000;
   $('#liveDot').className = 'dot ' + (live ? 'live' : '');
-  $('#meta').textContent = live ? `Živě, poslední obchod ${ago(q.liveTs)}` : `Poslední cena ${q.t ? ago(q.t) : ''}`;
+  if(live){ $('#meta').textContent = `Živě, poslední obchod ${ago(q.liveTs)}`; return; }
+  const m = minsToOpen();
+  if(m > 0){
+    const d = q.t ? new Date(q.t).toLocaleDateString('cs-CZ', {weekday:'long', day:'numeric', month:'numeric'}) : '';
+    $('#meta').textContent = `Burza v USA je zavřená. Cena je ze závěru ${d}. Živé ceny ${openText(m)}.`;
+  } else {
+    $('#meta').textContent = `Poslední cena ${q.t ? ago(q.t) : ''}`;
+  }
 }
 function renderStats(){
   const sym = state.sel, q = state.q[sym] || {}, m = state.metric || {}, p = state.profile[sym] || {}, c = cur(sym);
