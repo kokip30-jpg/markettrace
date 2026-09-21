@@ -35,6 +35,37 @@ def time_left():
 
 # ---------------------------------------------------------------- HTTP
 _last_sec = [0.0]
+DEBUG = {'errors': [], 'probe': []}
+UA_CANDIDATES = [
+    UA,
+    'MarketTrace/1.0 (+https://github.com/kokip30-jpg/markettrace; kokip30-jpg@users.noreply.github.com)',
+    'Mozilla/5.0 (compatible; MarketTrace/1.0; +https://github.com/kokip30-jpg/markettrace) kokip30-jpg@users.noreply.github.com',
+]
+
+
+def note_error(url, code, body=b''):
+    if len(DEBUG['errors']) < 25:
+        DEBUG['errors'].append({'url': url[:160], 'code': code,
+                                'body': (body or b'')[:300].decode('utf-8', 'replace')})
+
+
+def probe_sec():
+    """Ověří, že SEC přijímá naše dotazy, a vybere funkční User-Agent."""
+    global UA
+    for ua in UA_CANDIDATES:
+        try:
+            req = urllib.request.Request('https://www.sec.gov/files/company_tickers.json',
+                                         headers={'User-Agent': ua, 'Accept-Encoding': 'gzip, deflate'})
+            with urllib.request.urlopen(req, timeout=30) as r:
+                DEBUG['probe'].append({'ua': ua, 'code': r.status})
+                UA = ua
+                return True
+        except urllib.error.HTTPError as e:
+            DEBUG['probe'].append({'ua': ua, 'code': e.code, 'body': e.read()[:300].decode('utf-8', 'replace')})
+        except Exception as e:
+            DEBUG['probe'].append({'ua': ua, 'error': repr(e)[:200]})
+        time.sleep(2)
+    return False
 
 
 def http(url, data=None, headers=None, tries=4):
@@ -58,12 +89,19 @@ def http(url, data=None, headers=None, tries=4):
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None
+            try:
+                note_error(url, e.code, e.read())
+            except Exception:
+                note_error(url, e.code)
+            if e.code == 403 and i >= 1:
+                return None
             if e.code in (403, 429, 500, 502, 503, 504):
                 time.sleep((10 if e.code in (403, 429) else 2) * (i + 1))
                 continue
             log('HTTP', e.code, url)
             return None
         except Exception as e:  # síťové chyby, timeouty
+            note_error(url, repr(e)[:120])
             log('síť', type(e).__name__, url)
             time.sleep(2 * (i + 1))
     log('vzdávám', url)
@@ -320,7 +358,7 @@ def update_feed(meta):
                 buys.append(r)
             elif r.get('k') == 'S' and val >= min_sell:
                 sells.append(r)
-    if done == len(todo):
+    if done and done == len(todo):
         meta['backfilled'] = True
 
     cut_b = (TODAY - timedelta(days=CFG.get('buy_days', 45))).isoformat()
@@ -540,6 +578,14 @@ def update_gurus(tmap):
 def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
+    if not probe_sec():
+        log('SEC odmítá dotazy:', DEBUG['probe'])
+        meta['error'] = 'SEC odmítá dotazy'
+        meta['updated'] = datetime.now(timezone.utc).isoformat()
+        save('meta.json', meta)
+        save('debug.json', DEBUG)
+        return
+    meta.pop('error', None)
     tmap = ticker_map(meta)
     log('tickerů v SEC:', len(tmap))
 
@@ -571,6 +617,7 @@ def main():
 
     meta['updated'] = datetime.now(timezone.utc).isoformat()
     save('meta.json', meta)
+    save('debug.json', DEBUG)
     log('hotovo za', round(time.time() - START), 's')
 
 
