@@ -840,6 +840,58 @@ def update_alpaca(meta, symbols):
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
+def build_market_snapshot(symbols):
+    """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
+    ext_doc = load('ext.json', {})
+    ext = ext_doc.get('sym', {})
+    names = load('tickers.json', {})
+    buys = load('feed-buys.json', [])
+    buy_counts = {}
+    for row in buys:
+        ticker = row.get('t')
+        if ticker:
+            buy_counts[ticker] = buy_counts.get(ticker, 0) + 1
+    out = []
+    for sym in symbols:
+        bars = load(f'bars/{sym}.json', [])
+        bars = [b for b in bars if isinstance(b, list) and len(b) >= 6]
+        current = ext.get(sym, {})
+        last = bars[-1] if bars else None
+        previous = bars[-2] if len(bars) > 1 else None
+        price = current.get('p') or (last[4] if last else None)
+        prev_close = current.get('pc') or (previous[4] if previous else None)
+        if price is None:
+            continue
+        completed_day = last if last and last[0] == datetime.now(NY).date().isoformat() else None
+        if current.get('s') == 'post' and completed_day:
+            day_high, day_low, volume = completed_day[2], completed_day[3], completed_day[5]
+        else:
+            day_high = current.get('h') or (last[2] if last else price)
+            day_low = current.get('l') or (last[3] if last else price)
+            volume = current.get('v') or (last[5] if last else 0)
+        history = bars[-252:]
+        completed = bars[-21:-1] if len(bars) > 1 else bars[-20:]
+        avg_volume = sum(b[5] or 0 for b in completed) / len(completed) if completed else None
+        name_data = names.get(sym) or []
+        name = name_data[1] if len(name_data) > 1 else sym
+        out.append(clean({
+            'ticker': sym, 'name': name, 'price': price, 'previous_close': prev_close,
+            'change': ((price - prev_close) / prev_close * 100) if prev_close else None,
+            'day_high': day_high, 'day_low': day_low, 'volume': volume,
+            'avg_volume': avg_volume, 'rel_volume': (volume / avg_volume) if avg_volume else None,
+            'year_high': max((b[2] for b in history), default=day_high),
+            'year_low': min((b[3] for b in history), default=day_low),
+            'insider_buys': buy_counts.get(sym, 0),
+            'timestamp': current.get('t') or (last[0] if last else None),
+        }))
+    out.sort(key=lambda row: row.get('volume') or 0, reverse=True)
+    save('market.json', {
+        'updated': ext_doc.get('updated') or NOW.isoformat(), 'delay': ext_doc.get('delay', 15),
+        'source': 'Alpaca + SEC EDGAR', 'symbols': out,
+    })
+    log('tržní snapshot:', len(out), 'titulů')
+
+
 # ---------------------------------------------------------------- kurz ČNB
 def update_fx(meta):
     if meta.get('fx_at', '')[:10] == TODAY.isoformat():
@@ -1071,8 +1123,9 @@ def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
     tickers = [t.upper() for t in CFG.get('tickers', [])]
+    market_symbols = list(dict.fromkeys(tickers + [t.upper() for t in CFG.get('market_symbols', [])]))
 
-    for step in (lambda: update_alpaca(meta, tickers), lambda: update_fx(meta)):
+    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_market_snapshot(market_symbols), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:
@@ -1138,6 +1191,10 @@ def main():
         notify(meta, got.get('update_144'), got.get('update_13d'), gurus_before, gurus_now)
     except Exception as e:
         log('CHYBA upozornění:', repr(e))
+    try:
+        build_market_snapshot(market_symbols)
+    except Exception as e:
+        log('CHYBA tržní snapshot:', repr(e))
     meta['alpaca'] = bool(AK and AS)
     meta['notify'] = bool(TOPIC)
     meta['updated'] = datetime.now(timezone.utc).isoformat()

@@ -1,5 +1,11 @@
 {
-  "user_agent": "MarketTrace Pavel admin@masaze-tisnov.cz",
+  "user_agent": "MarketTrace kokip30-jpg@users.noreply.github.com",
+  "market_symbols": [
+    "SPY",
+    "QQQ",
+    "DIA",
+    "IWM"
+  ],
   "tickers": [
     "NVDA",
     "AAPL",
