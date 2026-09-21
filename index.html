@@ -147,6 +147,29 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
 .primary{margin-top:12px;width:100%;border:0;border-radius:9px;padding:11px;background:var(--accent);color:#fff;font-weight:700}
 .err{color:var(--down);font-size:13px;margin-top:8px;min-height:1em}
 
+/* Ceny mimo hlavní seanci, výsledky, portfolio */
+.ext{font-size:14px;font-weight:600;margin-top:6px}
+.ext small{font-weight:500;color:var(--muted)}
+.earn-side{margin:14px 8px 0;font-size:13px}
+.earn-side h3{font-size:13px;margin:0 0 6px}
+.earn-side ul{list-style:none;margin:0;padding:0}
+.earn-side li{display:flex;justify-content:space-between;gap:8px;padding:3px 0}
+.earn-side button{border:0;background:none;padding:0;font-weight:700;color:var(--accent)}
+.bignum{font-size:22px;font-weight:800;letter-spacing:-.02em}
+.ptot{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:10px}
+.ptot div{background:var(--bg);border-radius:10px;padding:12px 14px}
+.ptot span{display:block;font-size:12px;color:var(--muted)}
+.pform{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px;align-items:end}
+.pform label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);font-weight:600}
+.pform input{padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit;font-size:16px}
+.pform .primary{margin:0}
+.h3{font-size:15px;margin:0 0 10px}
+.lots{list-style:none;margin:6px 0 0;padding:0}
+.lots li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:4px 0;color:var(--muted)}
+.lots button{border:0;background:none;color:var(--down);font-weight:700;padding:4px 8px}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:4px 14px;margin-top:8px;font-size:13px}
+.pgrid span{color:var(--muted);display:block;font-size:12px}
+.pgrid b{font-size:14px}
 /* Pohledy: Insideři, Guru */
 .views{display:flex;gap:3px;background:var(--bg);padding:3px;border-radius:10px;border:1px solid var(--line)}
 .views button{border:0;background:none;padding:7px 13px;border-radius:7px;font-weight:700;font-size:14px;color:var(--muted)}
@@ -171,6 +194,9 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
 .c-who{font-weight:700;margin-top:6px}
 .c-who span{font-weight:500;color:var(--muted)}
 .c-tags{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 4px}
+.score{display:inline-block;font-size:12px;font-weight:800;padding:2px 9px;border-radius:999px;background:var(--chip)}
+.score.hi{background:var(--up);color:#fff}
+.score.mid{background:var(--upbg);color:var(--up)}
 .tag.warn{background:rgba(217,154,30,.16);color:#B7791F}
 .tag.info{background:rgba(43,87,224,.12);color:var(--accent)}
 .c-row{font-size:13px;color:var(--muted)}
@@ -194,6 +220,7 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
   .views{order:2;flex-basis:100%}
   .views button{flex:1;padding:9px 6px}
   .vwrap{padding:10px;gap:10px}
+  #insMode,#insFilt{flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;-webkit-overflow-scrolling:touch}
   .pad{padding:14px}
 }
 @media (max-width:900px){
@@ -263,6 +290,7 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
     <button role="tab" data-view="market" aria-selected="true">Trh</button>
     <button role="tab" data-view="insiders" aria-selected="false">Insideři</button>
     <button role="tab" data-view="gurus" aria-selected="false">Guru</button>
+    <button role="tab" data-view="portfolio" aria-selected="false">Portfolio</button>
   </nav>
   <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="results">
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -277,6 +305,7 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
   <aside class="side panel">
     <h2>Sledované</h2>
     <ul id="watch" class="watch"></ul>
+    <div id="earnSide" class="earn-side" hidden></div>
     <p class="side-note">Ceny akcií z USA se aktualizují v reálném čase z každého obchodu. Data: Finnhub, graf: TradingView.</p>
   </aside>
 
@@ -293,6 +322,7 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
       <div class="q-price">
         <div id="price" class="price">—</div>
         <div id="chg" class="chg">—</div>
+        <div id="ext" class="ext" hidden></div>
         <div class="meta"><span id="liveDot" class="dot"></span><span id="meta">Čekám na data</span></div>
       </div>
     </section>
@@ -305,7 +335,9 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
       <nav class="tabs" role="tablist">
         <button role="tab" data-tab="insider" aria-selected="true">Insider obchody</button>
         <button role="tab" data-tab="news" aria-selected="false">Zprávy</button>
+        <button role="tab" data-tab="ichart" aria-selected="false">Graf insiderů</button>
         <button role="tab" data-tab="guru" aria-selected="false">Guru</button>
+        <button role="tab" data-tab="earn" aria-selected="false">Výsledky</button>
         <button role="tab" data-tab="analysts" aria-selected="false">Analytici</button>
         <button role="tab" data-tab="profile" aria-selected="false">O firmě</button>
       </nav>
@@ -317,12 +349,16 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
 <div class="vwrap" id="view-insiders" hidden>
   <section class="panel pad">
     <div class="head-row"><h2>Obchody insiderů</h2><span class="muted" id="secUpd"></span></div>
-    <p class="hint">Přímo z hlášení Form 4 u SEC. Nákupy na volném trhu jsou nejsilnější signál, insider za ně platí vlastními penězi. Prodeje mají slabší výpověď, často jde o daně, diverzifikaci nebo předem naplánovaný prodej (plán 10b5-1).</p>
+    <p class="hint" id="insHint"></p>
     <div class="chips" id="insMode">
       <button data-m="buys" aria-pressed="true">Nákupy <small>45 dní</small></button>
       <button data-m="sells" aria-pressed="false">Velké prodeje <small>14 dní, nad 1 mil. $</small></button>
+      <button data-m="f144" aria-pressed="false">Plánované prodeje <small>Form 144</small></button>
+      <button data-m="f13d" aria-pressed="false">Aktivisté <small>podíly nad 5 %</small></button>
     </div>
     <div class="chips" id="insFilt">
+      <button data-f="score7" aria-pressed="false">Skóre 7+</button>
+      <button data-f="byscore" aria-pressed="false">Řadit podle skóre</button>
       <button data-f="cluster" aria-pressed="false">Skupinové</button>
       <button data-f="exec" aria-pressed="false">Jen vedení</button>
       <button data-f="noplan" aria-pressed="false">Mimo plán 10b5-1</button>
@@ -344,6 +380,25 @@ dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-ra
   <section class="panel pad">
     <div class="chips scroll" id="guruPick"></div>
     <div id="guruBody"></div>
+  </section>
+</div>
+
+<div class="vwrap" id="view-portfolio" hidden>
+  <section class="panel pad">
+    <div class="head-row"><h2>Moje portfolio</h2><span class="muted" id="fxInfo"></span></div>
+    <div class="ptot" id="pTot"></div>
+  </section>
+  <section class="panel pad" id="pListWrap"><div id="pList"></div></section>
+  <section class="panel pad">
+    <h3 class="h3">Přidat nákup</h3>
+    <form id="pForm" class="pform" autocomplete="off">
+      <label>Ticker<input id="pSym" required placeholder="např. NVDA" autocapitalize="characters" spellcheck="false"></label>
+      <label>Počet kusů<input id="pQty" type="number" step="any" min="0" required inputmode="decimal"></label>
+      <label>Nákupní cena za kus ($)<input id="pPx" type="number" step="any" min="0" required inputmode="decimal"></label>
+      <label>Kurz při nákupu (Kč za $)<input id="pFx" type="number" step="any" min="0" inputmode="decimal" placeholder="nepovinné"></label>
+      <button class="primary" type="submit">Přidat</button>
+    </form>
+    <p class="hint">Ukládá se jen v tomto prohlížeči. Další nákup stejného tickeru se připočte a spočítá se průměrná cena. Bez kurzu při nákupu se zisk v korunách počítá dnešním kurzem ČNB.</p>
   </section>
 </div>
 
@@ -392,7 +447,7 @@ const num = (v, d=2) => ok(v) ? nf(d).format(v) : '—';
 const cur = sym => (state.profile[sym] && state.profile[sym].currency) || 'USD';
 function money(v, c='USD'){
   if(!ok(v)) return '—';
-  const d = Math.abs(v) < 1 ? 4 : 2;
+  const d = Math.abs(v) < 1 && v !== 0 ? 4 : 2;
   try{ return new Intl.NumberFormat('cs-CZ',{style:'currency',currency:c,minimumFractionDigits:d,maximumFractionDigits:d}).format(v); }
   catch{ return num(v,d) + ' ' + c; }
 }
@@ -466,7 +521,9 @@ let raf = 0;
 function markDirty(s){ state.dirty.add(s); if(!raf) raf = requestAnimationFrame(flush); }
 function flush(){
   raf = 0;
-  for(const s of state.dirty){ renderWatchRow(s); if(s === state.sel){ renderPrice(); renderStats(); } }
+  let port = false;
+  for(const s of state.dirty){ renderWatchRow(s); if(s === state.sel){ renderPrice(); renderStats(); } if(portSyms().includes(s)) port = true; }
+  if(port && !$('#view-portfolio').hidden) renderPortfolio();
   state.dirty.clear();
 }
 function flash(el, dir){
@@ -476,7 +533,7 @@ function flash(el, dir){
 }
 
 /* ---------- WebSocket (živé obchody) ---------- */
-const wanted = () => new Set([...state.watch, state.sel].filter(Boolean));
+const wanted = () => new Set([...state.watch, state.sel, ...portSyms()].filter(Boolean));
 function connectWS(){
   if(!state.key) return;
   const old = state.ws; state.ws = null;
@@ -686,11 +743,15 @@ async function loadDetail(sym){
   renderWatchBtn(); renderPrice(); renderStats();
   $('#tabpanel').innerHTML = '<p class="note">Načítám…</p>';
   mountChart(sym);
-  const [q, p, m, rec] = await Promise.allSettled([
+  state.earn = null;
+  renderExt();
+  const [q, p, m, rec, ec, eh] = await Promise.allSettled([
     api('/quote', {symbol:sym}),
     api('/stock/profile2', {symbol:sym}),
     api('/stock/metric', {symbol:sym, metric:'all'}),
-    api('/stock/recommendation', {symbol:sym})
+    api('/stock/recommendation', {symbol:sym}),
+    api('/calendar/earnings', {symbol:sym, from:isoDay(new Date()), to:isoDay(new Date(Date.now() + 120 * 864e5))}),
+    api('/stock/earnings', {symbol:sym})
   ]);
   if(my !== state.detailReq) return;
   const gotQuote = q.status === 'fulfilled' && setQuote(sym, q.value);
@@ -699,6 +760,10 @@ async function loadDetail(sym){
   if(prof.name){ state.names[sym] = prof.name; LS.set('mt_names', state.names); renderWatchRow(sym); }
   state.metric = m.status === 'fulfilled' ? ((m.value && m.value.metric) || {}) : {};
   state.rec = rec.status === 'fulfilled' ? rec.value : null;
+  const cal = ec.status === 'fulfilled' ? ((ec.value && ec.value.earningsCalendar) || []) : [];
+  state.earn = { next: cal.filter(x => x.date >= isoDay(new Date())).sort((a,b) => a.date.localeCompare(b.date))[0] || null,
+                 hist: eh.status === 'fulfilled' && Array.isArray(eh.value) ? eh.value : [] };
+  renderExt();
   renderHeader(sym);
   if(!gotQuote){
     const err = q.status === 'rejected' ? q.reason.message : 'Pro tento ticker nejsou v bezplatném tarifu dostupné ceny. Živé ceny fungují pro akcie a ETF z USA.';
@@ -777,7 +842,8 @@ function renderStats(){
     ['EPS (TTM)', num(eps)],
     ['Beta', num(m.beta)],
     ['Dividendový výnos', ok(m.dividendYieldIndicatedAnnual) ? num(m.dividendYieldIndicatedAnnual) + ' %' : '—'],
-    ['Prům. objem (10 dní)', ok(m['10DayAverageTradingVolume']) ? big(m['10DayAverageTradingVolume'] * 1e6) + ' ks' : '—']
+    ['Prům. objem (10 dní)', ok(m['10DayAverageTradingVolume']) ? big(m['10DayAverageTradingVolume'] * 1e6) + ' ks' : '—'],
+    ['Příští výsledky', state.earn && state.earn.next ? dateCz(state.earn.next.date) + (HOUR[state.earn.next.hour] ? ', ' + HOUR[state.earn.next.hour] : '') : '—']
   ];
   $('#stats').innerHTML = items.map(([k,v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
 }
@@ -819,6 +885,8 @@ async function loadTab(tab){
   const sym = state.sel, panel = $('#tabpanel'), key = sym + ':' + tab;
   if(tab === 'analysts'){ panel.innerHTML = renderAnalysts(); return; }
   if(tab === 'profile'){ panel.innerHTML = renderProfile(sym); return; }
+  if(tab === 'ichart'){ renderInsiderChart(sym, panel); return; }
+  if(tab === 'earn'){ panel.innerHTML = renderEarnings(sym); return; }
   if(tab === 'guru'){ panel.innerHTML = '<p class="note">Načítám…</p>'; const g = await secData('gurus.json'); if(state.sel === sym && state.tab === tab) panel.innerHTML = renderTickerGurus(sym, g); return; }
   if(state.cache[key]){ panel.innerHTML = state.cache[key]; return; }
   panel.innerHTML = '<p class="note">Načítám…</p>';
@@ -990,7 +1058,9 @@ function groupDeals(rows){
 function dealCard(g){
   const [label, kind] = CODES[g.k] || [g.k || '—', ''];
   const buy = g.ad === 'A' || g.k === 'P';
-  const tags = [`<span class="tag ${kind}">${label}</span>`];
+  const tags = [];
+  if(g.k === 'P' && g.sc) tags.push(`<span class="score ${g.sc >= 8 ? 'hi' : g.sc >= 6 ? 'mid' : ''}" title="Síla signálu">Skóre ${g.sc}/10</span>`);
+  tags.push(`<span class="tag ${kind}">${label}</span>`);
   if(g.cluster >= 2) tags.push(`<span class="tag ${g.k === 'P' ? 'buy' : 'warn'}">Skupinový ${g.k === 'P' ? 'nákup' : 'prodej'}: ${g.cluster} insideři</span>`);
   if(EXEC_RE.test(g.r || '')) tags.push('<span class="tag info">Vedení</span>');
   if(g.tp) tags.push('<span class="tag info">Vlastník nad 10 %</span>');
@@ -1012,6 +1082,7 @@ function dealCard(g){
     <div class="c-tags">${tags.join('')}</div>
     <div class="c-row">${num(g.s, 0)} ks${g.p ? ` za průměrně ${money(g.p)}` : ''} · obchod ${when} · zveřejněno ${dateCz(g.f)}${g.n === 'I' ? ` · nepřímo${g.nn ? ': ' + esc(g.nn) : ''}` : ''}</div>
     <details><summary>Poznámky a zdroj</summary>
+      ${g.k === 'P' && g.why && g.why.length ? `<p class="muted">Skóre zvyšuje: ${g.why.map(esc).join(', ')}.</p>` : ''}
       ${notes.length ? `<ul>${notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>` : '<p class="muted">Hlášení neobsahuje poznámky.</p>'}
       ${ok(g.h) ? `<p class="muted">Po obchodu drží ${num(g.h, 0)} ks.</p>` : ''}
       <a href="${esc(g.u)}" target="_blank" rel="noopener">Originální hlášení na SEC</a>
@@ -1045,24 +1116,42 @@ async function loadInsiders(){
   const list = $('#insList');
   if(!ins.deals || ins.deals.mode !== ins.mode){
     list.innerHTML = '<li class="muted">Načítám…</li>';
-    const [rows, meta] = await Promise.all([secData(ins.mode === 'buys' ? 'feed-buys.json' : 'feed-sells.json'), secData('meta.json')]);
+    const file = {buys:'feed-buys.json', sells:'feed-sells.json', f144:'f144.json', f13d:'f13d.json'}[ins.mode];
+    const [rows, meta] = await Promise.all([secData(file), secData('meta.json')]);
     $('#secUpd').textContent = meta && meta.updated ? 'Aktualizováno ' + ago(new Date(meta.updated).getTime()) : '';
     if(!rows){
       list.innerHTML = `<li class="muted">Data SEC zatím nejsou připravená. ${location.protocol.startsWith('http') ? 'První sběr po nasazení trvá asi 30 minut.' : 'Zobrazí se jen na webové adrese stránky.'}</li>`;
       $('#insMore').hidden = true; $('#insCount').textContent = '';
       return;
     }
-    ins.deals = groupDeals(rows); ins.deals.mode = ins.mode;
+    ins.deals = DEAL_MODES.includes(ins.mode) ? groupDeals(rows) : rows.slice(); ins.deals.mode = ins.mode;
   }
   renderInsiderList();
 }
 function renderInsiderList(){
+  $('#insHint').textContent = INS_HINT[ins.mode];
+  document.querySelectorAll('#insFilt [data-f]').forEach(b => {
+    const f = b.dataset.f;
+    b.hidden = (!DEAL_MODES.includes(ins.mode) && f !== 'watch') || (ins.mode !== 'buys' && (f === 'score7' || f === 'byscore'));
+  });
+  if(!DEAL_MODES.includes(ins.mode)){
+    let d = ins.deals;
+    if(ins.f.has('watch')) d = d.filter(r => state.watch.includes(r.t) || portSyms().includes(r.t));
+    $('#insCount').textContent = `${d.length} ${d.length === 1 ? 'hlášení' : 'hlášení'}`;
+    const card = ins.mode === 'f144' ? f144Card : f13dCard;
+    $('#insList').innerHTML = d.length ? d.slice(0, ins.shown).map(card).join('') : '<li class="muted">Zatím tu nic není.</li>';
+    $('#insMore').hidden = d.length <= ins.shown;
+    return;
+  }
   let d = ins.deals.filter(g => g.k === (ins.mode === 'buys' ? 'P' : 'S'));
+  if(ins.f.has('score7')) d = d.filter(g => (g.sc || 0) >= 7);
+  if(ins.f.has('byscore')) d = d.slice().sort((a, b) => (b.sc || 0) - (a.sc || 0) || b.val - a.val);
   if(ins.f.has('cluster')) d = d.filter(g => g.cluster >= 2);
   if(ins.f.has('exec')) d = d.filter(g => EXEC_RE.test(g.r || ''));
   if(ins.f.has('noplan')) d = d.filter(g => !g.pl);
+  if(ins.mode !== 'buys') d = d.filter(g => g.k === 'S');
   if(ins.f.has('big')) d = d.filter(g => g.val >= 1e6);
-  if(ins.f.has('watch')) d = d.filter(g => state.watch.includes(g.t));
+  if(ins.f.has('watch')) d = d.filter(g => state.watch.includes(g.t) || portSyms().includes(g.t));
   $('#insCount').textContent = `${d.length} ${d.length === 1 ? 'obchod' : d.length < 5 && d.length ? 'obchody' : 'obchodů'}`;
   $('#insList').innerHTML = d.length ? d.slice(0, ins.shown).map(dealCard).join('') : '<li class="muted">Tomuto filtru nic neodpovídá.</li>';
   $('#insMore').hidden = d.length <= ins.shown;
@@ -1167,12 +1256,234 @@ function renderTickerGurus(sym, data){
     </li>`).join('')}</ul>`;
 }
 
+/* ---------- ceny mimo hlavní seanci (Alpaca přes GitHub Actions) ---------- */
+const HOUR = {bmo:'před otevřením', amc:'po zavření', dmh:'během dne'};
+async function renderExt(){
+  const el = $('#ext'), sym = state.sel;
+  const data = await secData('ext.json');
+  const e = data && data.sym && data.sym[sym], q = state.q[sym] || {};
+  if(!e || e.s === 'regular' || sym !== state.sel){ el.hidden = true; return; }
+  const t = new Date(e.t).getTime();
+  const live = q.liveTs && Date.now() - q.liveTs < 60000;
+  if(live || Date.now() - t > 18 * 3600e3 || (q.t && q.t > t)){ el.hidden = true; return; }
+  const base = e.s === 'pre' ? e.pc : (e.rc || q.price || e.pc);
+  const d = ok(base) && base ? (e.p - base) / base * 100 : null;
+  el.innerHTML = `${e.s === 'pre' ? 'Před otevřením' : 'Po zavření'}: ${money(e.p, cur(sym))} <span class="${cls(d)}">${pct(d)}</span>
+    <small>· stav ${new Date(t).toLocaleTimeString('cs-CZ', {hour:'2-digit', minute:'2-digit'})}, zpoždění 15 min</small>`;
+  el.hidden = false;
+}
+setInterval(renderExt, 60000);
+
+/* ---------- výsledky hospodaření ---------- */
+function renderEarnings(sym){
+  const e = state.earn;
+  if(!e) return '<p class="note">Načítám…</p>';
+  const n = e.next;
+  const next = n ? `<div class="summary">
+      <div>Příští výsledky<br><b>${dateCz(n.date)}</b> <span class="muted">${HOUR[n.hour] || ''}</span></div>
+      <div>Odhad EPS<br><b>${ok(n.epsEstimate) ? num(n.epsEstimate) + ' $' : '—'}</b></div>
+      <div>Odhad tržeb<br><b>${ok(n.revenueEstimate) ? usd(n.revenueEstimate) : '—'}</b></div>
+      <div>Čtvrtletí<br><b>${n.quarter ? `Q${n.quarter} ${n.year}` : '—'}</b></div>
+    </div>` : '<p class="note">Datum příštích výsledků zatím není oznámené.</p>';
+  const rows = e.hist.slice(0, 8).map(h => `<tr>
+      <td data-l="Období">${dateCz(h.period)}</td>
+      <td class="num" data-l="EPS skutečnost">${num(h.actual)}</td>
+      <td class="num" data-l="EPS odhad">${num(h.estimate)}</td>
+      <td class="num ${cls(h.surprisePercent)}" data-l="Překvapení">${pct(h.surprisePercent)}</td>
+    </tr>`).join('');
+  return next + (rows ? `<h3 class="h3" style="margin-top:18px">Minulá čtvrtletí</h3>
+    <div class="tbl-wrap"><table><thead><tr><th>Období</th><th class="num">EPS skutečnost</th><th class="num">EPS odhad</th><th class="num">Překvapení</th></tr></thead><tbody>${rows}</tbody></table></div>
+    <p class="hint">Insideři před zveřejněním výsledků obvykle obchodovat nesmí. Nákup krátce po výsledcích proto bývá zajímavější signál.</p>` : '');
+}
+async function loadEarnSide(){
+  const box = $('#earnSide');
+  const syms = new Set([...state.watch, ...portSyms()]);
+  if(!state.key || !syms.size){ box.hidden = true; return; }
+  try{
+    const r = await api('/calendar/earnings', {from:isoDay(new Date()), to:isoDay(new Date(Date.now() + 30 * 864e5))});
+    const list = ((r && r.earningsCalendar) || []).filter(x => syms.has(x.symbol)).sort((a,b) => a.date.localeCompare(b.date));
+    if(!list.length){ box.hidden = true; return; }
+    box.innerHTML = '<h3>Výsledky do 30 dní</h3><ul>' + list.map(x => `<li><button data-open="${esc(x.symbol)}">${esc(x.symbol)}</button><span class="muted">${dateCz(x.date)}${HOUR[x.hour] ? ', ' + HOUR[x.hour] : ''}</span></li>`).join('') + '</ul>';
+    box.hidden = false;
+  }catch{ box.hidden = true; }
+}
+
+/* ---------- graf s obchody insiderů ---------- */
+let lwPromise;
+function loadLW(){
+  if(window.LightweightCharts) return Promise.resolve();
+  return lwPromise ||= new Promise((res, rej) => {
+    const sc = document.createElement('script');
+    sc.src = 'https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.3/dist/lightweight-charts.standalone.production.js';
+    sc.onload = res; sc.onerror = () => { lwPromise = null; rej(); };
+    document.head.appendChild(sc);
+  });
+}
+async function renderInsiderChart(sym, panel){
+  panel.innerHTML = '<p class="note">Načítám…</p>';
+  const [bars, sec, meta] = await Promise.all([secData(`bars/${sym}.json`), secData(`t/${sym}.json`), secData('meta.json')]);
+  if(state.sel !== sym || state.tab !== 'ichart') return;
+  if(!bars || !bars.length){
+    panel.innerHTML = `<p class="note">${meta && meta.alpaca ? `Graf s insidery je dostupný pro tituly sledované v souboru config.json. ${esc(sym)} mezi nimi není.` : 'Graf s insidery se zobrazí po připojení bezplatného účtu Alpaca.'}</p>`;
+    return;
+  }
+  try{ await loadLW(); }catch{ panel.innerHTML = '<p class="note">Knihovnu grafu se nepodařilo načíst.</p>'; return; }
+  panel.innerHTML = `<div id="lw" style="height:360px"></div>
+    <p class="hint"><span class="up">▲</span> nákupy insiderů na volném trhu, <span class="down">▼</span> prodeje. Číslo udává hodnotu obchodů v daný den. Ceny jsou upravené o splity.</p>`;
+  const css = getComputedStyle(document.documentElement), v = n => css.getPropertyValue(n).trim();
+  const chart = LightweightCharts.createChart($('#lw'), {
+    autoSize: true,
+    layout: {background: {type: 'solid', color: 'transparent'}, textColor: v('--muted'), fontFamily: 'Manrope, system-ui, sans-serif'},
+    grid: {vertLines: {color: v('--line')}, horzLines: {color: v('--line')}},
+    rightPriceScale: {borderColor: v('--line')}, timeScale: {borderColor: v('--line')},
+    localization: {locale: 'cs-CZ'}
+  });
+  const series = chart.addCandlestickSeries({upColor: v('--up'), downColor: v('--down'), borderVisible: false, wickUpColor: v('--up'), wickDownColor: v('--down')});
+  const data = bars.map(b => ({time: b[0], open: b[1], high: b[2], low: b[3], close: b[4]}));
+  series.setData(data);
+  const dates = data.map(x => x.time), first = dates[0];
+  const snap = d => { if(!d || d < first) return null; const i = dates.findIndex(x => x >= d); return i < 0 ? dates[dates.length - 1] : dates[i]; };
+  const agg = {};
+  for(const g of groupDeals((sec && sec.tx) || [])){
+    if(g.k !== 'P' && g.k !== 'S') continue;
+    const t = snap(g.d2 || g.d1 || g.f); if(!t) continue;
+    const k = t + g.k;
+    (agg[k] ||= {time: t, k: g.k, val: 0}).val += g.val;
+  }
+  const markers = Object.values(agg).sort((a, b) => a.time.localeCompare(b.time)).map(m => ({
+    time: m.time, position: m.k === 'P' ? 'belowBar' : 'aboveBar', color: m.k === 'P' ? v('--up') : v('--down'),
+    shape: m.k === 'P' ? 'arrowUp' : 'arrowDown', text: '$' + big(m.val)
+  }));
+  series.setMarkers(markers);
+  chart.timeScale().fitContent();
+}
+
+/* ---------- Form 144 a 13D ---------- */
+const DEAL_MODES = ['buys', 'sells'];
+const INS_HINT = {
+  buys: 'Nákupy insiderů na volném trhu z hlášení Form 4. Insider za ně platí vlastními penězi, proto patří k nejsilnějším signálům.',
+  sells: 'Velké prodeje insiderů. Mají slabší výpověď, často jde o daně, diverzifikaci nebo předem naplánovaný prodej (plán 10b5-1). Pozornost si zaslouží prodeje mimo plán a prodej velké části podílu.',
+  f144: 'Form 144 je oznámení o záměru prodat akcie a podává se ještě před samotným prodejem. Je to nejdřívější varování, že se prodej chystá. Zobrazené jsou záměry nad 250 tis. $ za 14 dní.',
+  f13d: 'Schedule 13D podává ten, kdo získá přes 5 % firmy a chce ji aktivně ovlivňovat, například prosadit změny ve vedení nebo prodej firmy. Hlásí se do několika dnů od nákupu.'
+};
+function f144Card(r){
+  const share = r.out && r.s ? r.s / r.out * 100 : null;
+  const tags = ['<span class="tag sell">Plánovaný prodej</span>'];
+  tags.push(r.pl ? `<span class="tag">Plán 10b5-1 od ${dateCz(r.pl)}</span>` : '<span class="tag warn">Bez uvedeného plánu 10b5-1</span>');
+  if(EXEC_RE.test(r.r || '') || /officer/i.test(r.r || '')) tags.push('<span class="tag info">Vedení</span>');
+  if(r.v >= 1e7) tags.push('<span class="tag info">Nad 10 mil. $</span>');
+  if(r.am) tags.push('<span class="tag">Oprava hlášení</span>');
+  return `<li class="card">
+    <div class="c-top">${r.t ? `<button class="tk" data-open="${esc(r.t)}">${esc(r.t)}</button>` : ''}<span class="c-co">${esc(r.i || '')}</span>
+      <span class="c-val down">${usd(r.v)}</span></div>
+    <div class="c-who">${esc(titleCase(r.o))}${r.r ? ` <span>· ${esc(r.r)}</span>` : ''}</div>
+    <div class="c-tags">${tags.join('')}</div>
+    <div class="c-row">${num(r.s, 0)} ks${share ? ` (${num(share, share < 0.01 ? 4 : 2)} % všech akcií)` : ''} · prodej kolem ${dateCz(r.d)} · oznámeno ${dateCz(r.f)}</div>
+    <details><summary>Podrobnosti a zdroj</summary>
+      ${r.na ? `<p class="muted">Jak akcie získal: ${esc(r.na)}</p>` : ''}
+      <a href="${esc(r.u)}" target="_blank" rel="noopener">Originální hlášení na SEC</a>
+    </details>
+  </li>`;
+}
+function f13dCard(r){
+  const tags = [r.am ? '<span class="tag">Změna podílu</span>' : '<span class="tag buy">Nový aktivistický podíl</span>'];
+  if(ok(r.pct)) tags.push(`<span class="tag info">${num(r.pct, 1)} % firmy</span>`);
+  return `<li class="card">
+    <div class="c-top">${r.t ? `<button class="tk" data-open="${esc(r.t)}">${esc(r.t)}</button>` : ''}<span class="c-co">${esc(r.i || '')}</span>
+      ${ok(r.pct) ? `<span class="c-val">${num(r.pct, 1)} %</span>` : ''}</div>
+    <div class="c-who">${esc(titleCase(r.o))}</div>
+    <div class="c-tags">${tags.join('')}</div>
+    <div class="c-row">${ok(r.s) ? big(r.s) + ' ks · ' : ''}${r.ev ? 'rozhodná událost ' + dateCz(r.ev) + ' · ' : ''}podáno ${dateCz(r.f)}</div>
+    <details><summary>Záměr a zdroj</summary>
+      ${r.pu ? `<p class="muted">${esc(r.pu)}</p>` : '<p class="muted">Záměr je popsaný v originálním hlášení.</p>'}
+      <a href="${esc(r.u)}" target="_blank" rel="noopener">Originální hlášení na SEC</a>
+    </details>
+  </li>`;
+}
+
+/* ---------- portfolio ---------- */
+const port = { lots: LS.get('mt_port', []), fx: null };
+function portSyms(){ return [...new Set(port.lots.map(l => l.sym))]; }
+function savePort(){ LS.set('mt_port', port.lots); }
+async function loadPortfolio(){
+  if(!port.fx){ const fx = await secData('fx.json'); port.fx = fx && fx.USD ? fx : null; }
+  $('#fxInfo').textContent = port.fx ? `Kurz ČNB ${num(port.fx.USD, 3)} Kč za $ (${port.fx.date})` : 'Kurz ČNB se načte po prvním běhu automatu.';
+  renderPortfolio();
+  if(state.key) refreshQuotes();
+}
+function renderPortfolio(){
+  const fx = port.fx && port.fx.USD;
+  const czk = v => ok(v) && fx ? big(v * fx).replace(/ (tis|mil|mld|bil)\./, ' $1.') + ' Kč' : '—';
+  const czkFull = v => ok(v) ? new Intl.NumberFormat('cs-CZ', {style:'currency', currency:'CZK', maximumFractionDigits:0}).format(v) : '—';
+  let tv = 0, tc = 0, tcz = 0, tday = 0, missing = false;
+  const groups = portSyms().map(sym => {
+    const lots = port.lots.filter(l => l.sym === sym);
+    const qty = lots.reduce((a, l) => a + l.q, 0);
+    const cost = lots.reduce((a, l) => a + l.q * l.px, 0);
+    const costCzk = lots.reduce((a, l) => a + l.q * l.px * (l.fx || fx || 0), 0);
+    const q = state.q[sym] || {};
+    const price = q.price;
+    const val = ok(price) ? qty * price : null;
+    const day = ok(price) && ok(q.pc) ? qty * (price - q.pc) : null;
+    if(val == null) missing = true; else { tv += val; tc += cost; tcz += costCzk; tday += day || 0; }
+    return {sym, lots, qty, cost, costCzk, price, val, day, pc: q.pc};
+  });
+  const pl = tv - tc, plCzk = fx ? tv * fx - tcz : null;
+  const anyVal = groups.some(g => g.val != null);
+  $('#pTot').innerHTML = groups.length && !anyVal ? '<p class="muted">Ceny se načítají. Pokud se neobjeví, zkontrolujte API klíč Finnhub.</p>' : groups.length ? `
+    <div><span>Hodnota</span><b class="bignum">${fx ? czkFull(tv * fx) : usd(tv)}</b><br><small class="muted">${money(tv)}</small></div>
+    <div><span>Zisk / ztráta celkem</span><b class="bignum ${cls(pl)}">${fx ? czkFull(plCzk) : signed(pl) + ' $'}</b><br><small class="${cls(pl)}">${signed(pl)} $ (${pct(tc ? pl / tc * 100 : null)})</small></div>
+    <div><span>Dnes</span><b class="bignum ${cls(tday)}">${fx ? czkFull(tday * fx) : signed(tday) + ' $'}</b><br><small class="${cls(tday)}">${signed(tday)} $ (${pct(tv - tday ? tday / (tv - tday) * 100 : null)})</small></div>
+    ${missing ? '<p class="muted" style="grid-column:1/-1">U některých titulů zatím chybí cena, součty je nezahrnují.</p>' : ''}` : '<p class="muted">Zatím tu nic není. Přidejte první nákup níže.</p>';
+  $('#pListWrap').hidden = !groups.length;
+  $('#pList').innerHTML = '<ul class="cards">' + groups.sort((a, b) => (b.val || 0) - (a.val || 0)).map(g => {
+    const p = ok(g.val) ? g.val - g.cost : null;
+    const pCzk = ok(g.val) && fx ? g.val * fx - g.costCzk : null;
+    return `<li class="card">
+      <div class="c-top"><button class="tk" data-open="${esc(g.sym)}">${esc(g.sym)}</button><span class="c-co">${esc(state.names[g.sym] || '')}</span>
+        <span class="c-val ${cls(p)}">${pct(g.cost && ok(p) ? p / g.cost * 100 : null)}</span></div>
+      <div class="pgrid">
+        <div><span>Kusů</span><b>${num(g.qty, g.qty % 1 ? 4 : 0)}</b></div>
+        <div><span>Průměrná cena</span><b>${money(g.qty ? g.cost / g.qty : null)}</b></div>
+        <div><span>Aktuální cena</span><b>${money(g.price)}</b></div>
+        <div><span>Hodnota</span><b>${money(g.val)}</b></div>
+        <div><span>Zisk / ztráta</span><b class="${cls(p)}">${signed(p)} $</b></div>
+        <div><span>V korunách</span><b class="${cls(pCzk)}">${ok(pCzk) ? czkFull(pCzk) : '—'}</b></div>
+        <div><span>Dnes</span><b class="${cls(g.day)}">${signed(g.day)} $</b></div>
+      </div>
+      <details><summary>Nákupy (${g.lots.length})</summary><ul class="lots">
+        ${g.lots.map(l => `<li><span>${num(l.q, l.q % 1 ? 4 : 0)} ks za ${money(l.px)}${l.fx ? `, kurz ${num(l.fx, 2)}` : ''}${l.at ? ` · ${dateCz(l.at)}` : ''}</span><button type="button" data-lot="${esc(l.id)}" aria-label="Smazat nákup">Smazat</button></li>`).join('')}
+      </ul></details>
+    </li>`;
+  }).join('') + '</ul>';
+}
+$('#pForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const sym = $('#pSym').value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g, '');
+  const q = parseFloat($('#pQty').value.replace(',', '.')), px = parseFloat($('#pPx').value.replace(',', '.'));
+  const fx = parseFloat(($('#pFx').value || '').replace(',', '.'));
+  if(!sym || !(q > 0) || !(px > 0)) return;
+  port.lots.push({id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), sym, q, px, fx: fx > 0 ? fx : null, at: isoDay(new Date())});
+  savePort();
+  $('#pForm').reset();
+  syncSubs(); renderPortfolio();
+  if(state.key) refreshQuotes();
+});
+$('#pList').addEventListener('click', e => {
+  const b = e.target.closest('[data-lot]'); if(!b) return;
+  if(!confirm('Smazat tento nákup z portfolia?')) return;
+  port.lots = port.lots.filter(l => l.id !== b.dataset.lot);
+  savePort(); syncSubs(); renderPortfolio();
+});
+
 /* ---------- přepínání pohledů ---------- */
 function showView(v){
   document.querySelectorAll('.views [data-view]').forEach(b => b.setAttribute('aria-selected', b.dataset.view === v));
   $('#view-market').hidden = v !== 'market';
   $('#view-insiders').hidden = v !== 'insiders';
   $('#view-gurus').hidden = v !== 'gurus';
+  $('#view-portfolio').hidden = v !== 'portfolio';
+  if(v === 'portfolio') loadPortfolio();
   if(v === 'insiders') loadInsiders();
   if(v === 'gurus') loadGurus();
   window.scrollTo(0, 0);
@@ -1193,6 +1504,7 @@ function start(){
   state.cache = {};
   renderWatch(); renderStatus();
   connectWS(); loadMarket(); loadDetail(state.sel);
+  setTimeout(loadEarnSide, 4000);
   setTimeout(refreshQuotes, 1200);
   timers.push(setInterval(refreshQuotes, 30000));
   timers.push(setInterval(loadMarket, 5 * 60000));
@@ -1207,6 +1519,14 @@ window.addEventListener('online', () => { if(state.key){ state.wsTries = 0; conn
 renderWatch(); renderStatus(); renderStats();
 $('#sym').textContent = state.sel;
 if(state.key) start(); else dlg.showModal();
+function route(){
+  const h = decodeURIComponent(location.hash.slice(1));
+  const views = {insideri:'insiders', guru:'gurus', portfolio:'portfolio'};
+  if(views[h]) showView(views[h]);
+  else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h)) selectTicker(h);
+}
+window.addEventListener('hashchange', route);
+route();
 })();
 </script>
 </body>

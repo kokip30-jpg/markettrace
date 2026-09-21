@@ -32,7 +32,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Stáhnout data ze SEC
+      - name: Stáhnout data (SEC, Alpaca, ČNB)
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python scripts/update.py
 
       - name: Uložit data do repozitáře

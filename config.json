@@ -86,5 +86,12 @@
   "ticker_days": 365,
   "ticker_max_new": 150,
   "guru_hours": 12,
-  "max_minutes": 38
+  "max_minutes": 38,
+  "site_url": "https://kokip30-jpg.github.io/markettrace/",
+  "notify": {
+    "min_score": 8,
+    "f144_min": 1000000,
+    "all_13d": false,
+    "max_per_run": 8
+  }
 }
