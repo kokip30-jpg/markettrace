@@ -2,12 +2,11 @@ name: Data SEC a nasazení webu
 
 on:
   schedule:
-    - cron: '7,27,47 * * * 1-5'   # pracovní dny každých 20 minut
-    - cron: '17 */4 * * 0,6'      # víkend každé 4 hodiny
+    - cron: '*/5 * * * 1-5'     # pracovní dny každých 5 minut
+    - cron: '17 */2 * * 0,6'    # víkend každé 2 hodiny
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore: ['data/**']
 
 permissions:
   contents: write
@@ -27,6 +26,15 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Načíst uložená data (větev data)
+        run: |
+          if git fetch -q --depth=1 origin data; then
+            rm -rf data && git archive FETCH_HEAD data | tar -x
+          fi
+          mkdir -p data
 
       - uses: actions/setup-python@v5
         with:
@@ -39,19 +47,18 @@ jobs:
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
         run: python scripts/update.py
 
-      - name: Uložit data do repozitáře
+      - name: Uložit data (větev data, jen poslední verze)
+        env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
         run: |
-          git config user.name "markettrace-bot"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          tmp=$(mktemp -d)
+          cp -r data "$tmp/"
+          cd "$tmp"
+          git init -q -b data
           git add data
-          if ! git diff --cached --quiet; then
-            git commit -q -m "Data SEC $(date -u +'%Y-%m-%d %H:%M') UTC"
-            for i in 1 2 3 4 5; do
-              git pull -q --rebase -X theirs origin main && git push -q && break
-              git rebase --abort 2>/dev/null || true
-              sleep $((i * 5))
-            done
-          fi
+          git -c user.name="markettrace-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Data $(date -u +'%Y-%m-%d %H:%M') UTC"
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" data
 
       - uses: actions/configure-pages@v5
 
