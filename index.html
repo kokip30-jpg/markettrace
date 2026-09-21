@@ -1,0 +1,838 @@
+<!doctype html>
+<html lang="cs">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#152036" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#FFFFFF" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="MarketTrace">
+<meta name="application-name" content="MarketTrace">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232B57E0'/%3E%3Cpath d='M12 44l12-14 9 8 19-22' stroke='white' stroke-width='6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>MarketTrace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#F2F4F7; --panel:#FFFFFF; --line:#DCE2EA; --ink:#14203A; --muted:#5F6D86;
+  --up:#118447; --down:#C62F3A; --accent:#2B57E0; --chip:#EDF1F7; --upbg:rgba(17,132,71,.12); --downbg:rgba(198,47,58,.12);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0E1626; --panel:#152036; --line:#23314B; --ink:#E3E9F3; --muted:#8B99B2;
+    --up:#35C77C; --down:#F0626B; --accent:#6E94FF; --chip:#1B2842; --upbg:rgba(53,199,124,.14); --downbg:rgba(240,98,107,.14);
+    color-scheme: dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;overflow-x:hidden}
+body{background:var(--bg);color:var(--ink);font:15px/1.5 "Manrope",system-ui,-apple-system,"Segoe UI",sans-serif;font-variant-numeric:tabular-nums}
+a{color:var(--accent)}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+/* Header */
+.top{position:sticky;top:0;padding-top:max(12px,env(safe-area-inset-top));z-index:20;display:flex;align-items:center;gap:16px;padding:12px 20px;background:var(--panel);border-bottom:1px solid var(--line)}
+.brand{font-weight:800;font-size:18px;letter-spacing:-.02em;white-space:nowrap}
+.brand span{color:var(--accent)}
+.search{position:relative;flex:1;max-width:560px}
+.search input{width:100%;padding:10px 14px 10px 38px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.results{position:absolute;top:calc(100% + 6px);left:0;right:0;margin:0;padding:6px;list-style:none;background:var(--panel);border:1px solid var(--line);border-radius:10px;box-shadow:0 12px 32px rgba(10,20,40,.18);max-height:380px;overflow:auto}
+.results li{display:grid;grid-template-columns:84px 1fr auto;gap:10px;align-items:center;padding:8px 10px;border-radius:7px;cursor:pointer}
+.results li[aria-selected="true"],.results li:hover{background:var(--chip)}
+.results b{font-weight:700}
+.results .r-desc{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.results em{font-style:normal;font-size:12px;color:var(--muted)}
+.results .r-note{display:block;color:var(--muted);cursor:default}
+.status{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--muted);white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.live{background:var(--up);box-shadow:0 0 0 4px var(--upbg)}
+.dot.warn{background:#D99A1E}
+.dot.off{background:var(--down)}
+.ghost{border:1px solid var(--line);background:transparent;border-radius:8px;padding:7px 12px;font-size:13px;font-weight:600}
+
+/* Layout */
+.wrap{display:grid;grid-template-columns:290px minmax(0,1fr);gap:20px;padding:20px;max-width:1440px;margin:0 auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px}
+
+/* Watchlist */
+.side{padding:16px 10px 12px;align-self:start;position:sticky;top:84px}
+.side h2{font-size:14px;margin:0 8px 10px;font-weight:700}
+.watch{list-style:none;margin:0;padding:0}
+.w-row{display:grid;grid-template-columns:1fr auto 26px;align-items:center;gap:6px;border-radius:9px}
+.w-row.sel{background:var(--chip)}
+.w-main{display:grid;grid-template-columns:1fr auto;gap:0 10px;background:none;border:0;text-align:left;padding:9px 4px 9px 10px;border-radius:9px;min-width:0}
+.w-sym{font-weight:700}
+.w-name{grid-column:1;font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.w-px{grid-column:2;grid-row:1;text-align:right;font-weight:600}
+.w-chg{grid-column:2;grid-row:2;text-align:right;font-size:12px;font-weight:600}
+.w-x{border:0;background:none;color:var(--muted);font-size:18px;line-height:1;width:26px;height:26px;border-radius:6px;opacity:.55}
+.w-x:hover{opacity:1;background:var(--bg)}
+.up{color:var(--up)} .down{color:var(--down)}
+.flash-up{animation:fu .9s ease-out} .flash-down{animation:fd .9s ease-out}
+@keyframes fu{from{background:var(--upbg)}to{background:transparent}}
+@keyframes fd{from{background:var(--downbg)}to{background:transparent}}
+.side-note{font-size:12px;color:var(--muted);margin:14px 10px 0}
+.empty{color:var(--muted);font-size:13px;padding:8px 10px}
+
+/* Quote header */
+.main{display:flex;flex-direction:column;gap:20px;min-width:0}
+.quote{padding:20px 22px;display:flex;flex-wrap:wrap;justify-content:space-between;gap:16px 24px;align-items:flex-end}
+.q-id{display:flex;gap:14px;align-items:center;min-width:0}
+.logo{width:48px;height:48px;border-radius:12px;background:var(--chip);object-fit:contain;flex:none;display:grid;place-items:center;font-weight:800;color:var(--muted);overflow:hidden}
+.logo img{width:100%;height:100%;object-fit:contain;background:#fff}
+.q-id h1{margin:0;font-size:26px;line-height:1.1;letter-spacing:-.02em}
+.q-id p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.watch-btn{margin-left:6px;border:1px solid var(--line);background:transparent;border-radius:999px;padding:6px 14px;font-size:13px;font-weight:700;white-space:nowrap}
+.watch-btn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.q-price{text-align:right}
+.price{font-size:40px;font-weight:800;letter-spacing:-.03em;line-height:1;border-radius:8px;padding:0 4px}
+.chg{font-size:16px;font-weight:700;margin-top:6px}
+.meta{font-size:12px;color:var(--muted);margin-top:4px;display:flex;align-items:center;justify-content:flex-end;gap:6px}
+
+.chart{height:440px;overflow:hidden;padding:0}
+.chart .note{padding:20px;color:var(--muted)}
+
+.stats{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));margin:0;padding:6px}
+.stats div{padding:12px 16px}
+.stats dt{font-size:12px;color:var(--muted)}
+.stats dd{margin:2px 0 0;font-weight:700;font-size:15px}
+
+/* Tabs */
+.tabs{display:flex;gap:4px;padding:6px;border-bottom:1px solid var(--line);overflow-x:auto}
+.tabs button{border:0;background:none;padding:9px 14px;border-radius:8px;font-weight:600;color:var(--muted);white-space:nowrap}
+.tabs button[aria-selected="true"]{background:var(--chip);color:var(--ink)}
+.tabpanel{padding:18px 20px 22px;min-height:180px}
+.tabpanel .note{color:var(--muted)}
+.summary{display:flex;flex-wrap:wrap;gap:10px 28px;margin-bottom:14px;font-size:14px}
+.summary b{font-size:17px}
+.tbl-wrap{overflow-x:auto}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;font-size:12px;color:var(--muted);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+td.num,th.num{text-align:right}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--chip)}
+.tag.buy{background:var(--upbg);color:var(--up)} .tag.sell{background:var(--downbg);color:var(--down)}
+
+.news{list-style:none;margin:0;padding:0}
+.news li{display:grid;grid-template-columns:1fr 96px;gap:14px;padding:14px 0;border-bottom:1px solid var(--line)}
+.news li:last-child{border-bottom:0}
+.news a{color:var(--ink);font-weight:700;text-decoration:none;line-height:1.35}
+.news a:hover{text-decoration:underline}
+.news p{margin:4px 0 0;color:var(--muted);font-size:13px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.news small{color:var(--muted);font-size:12px}
+.news img{width:96px;height:64px;object-fit:cover;border-radius:8px;background:var(--chip)}
+
+.rec-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;margin:10px 0 8px}
+.rec-legend{display:flex;flex-wrap:wrap;gap:6px 18px;font-size:13px;color:var(--muted)}
+.rec-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.kv{display:grid;grid-template-columns:minmax(140px,220px) 1fr;gap:8px 16px;margin:0}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:600;overflow-wrap:anywhere}
+
+.foot{max-width:1440px;margin:0 auto;padding:0 20px 28px;font-size:12px;color:var(--muted)}
+
+/* Dialog */
+dialog{border:1px solid var(--line);border-radius:16px;background:var(--panel);color:var(--ink);padding:26px;max-width:460px;width:calc(100% - 32px)}
+dialog::backdrop{background:rgba(8,14,28,.55)}
+dialog h2{margin:0 0 8px;font-size:21px}
+dialog p{margin:0 0 14px;color:var(--muted);font-size:14px}
+dialog ol{margin:0 0 16px;padding-left:20px;font-size:14px}
+dialog input{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--ink);font:inherit}
+.primary{margin-top:12px;width:100%;border:0;border-radius:9px;padding:11px;background:var(--accent);color:#fff;font-weight:700}
+.err{color:var(--down);font-size:13px;margin-top:8px;min-height:1em}
+
+@media (max-width:900px){
+  body{font-size:15px;padding-bottom:env(safe-area-inset-bottom)}
+  .top{flex-wrap:wrap;padding:10px 12px;padding-top:max(10px,env(safe-area-inset-top));gap:8px 10px}
+  .brand{font-size:17px}
+  .status{margin-left:auto;font-size:12px}
+  .ghost{padding:7px 10px}
+  .search{order:3;flex-basis:100%;max-width:none}
+  .search input{font-size:16px;padding:12px 14px 12px 40px}
+  .results{max-height:60vh}
+  .results li{grid-template-columns:70px 1fr auto;padding:12px 10px}
+
+  .wrap{display:flex;flex-direction:column;padding:10px;gap:10px}
+  .main{display:contents}
+  .quote{order:1;padding:16px;flex-direction:column;align-items:stretch;gap:12px}
+  .side{order:2;position:static;padding:10px 8px}
+  .chart{order:3;height:320px}
+  .stats{order:4}
+  .main > .panel:last-child{order:5}
+
+  .q-id{flex-wrap:wrap}
+  .q-id h1{font-size:22px}
+  .watch-btn{margin-left:auto;padding:9px 16px}
+  .q-price{text-align:left}
+  .meta{justify-content:flex-start}
+  .price{font-size:36px;padding:0}
+
+  .side h2{margin:0 6px 8px}
+  .watch{display:flex;gap:8px;overflow-x:auto;padding:0 2px 4px;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch}
+  .w-row{grid-template-columns:auto 30px;border:1px solid var(--line);flex:none;scroll-snap-align:start}
+  .w-main{min-width:136px;padding:10px 4px 10px 12px}
+  .w-x{width:30px;height:30px}
+  .side-note{display:none}
+
+  .stats{grid-template-columns:1fr 1fr;padding:4px}
+  .stats div{padding:10px 12px}
+
+  .tabs button{padding:11px 14px}
+  .tabpanel{padding:14px}
+
+  /* insider tabulka jako karty */
+  .tbl-wrap table,.tbl-wrap tbody,.tbl-wrap tr,.tbl-wrap td{display:block;width:100%}
+  .tbl-wrap thead{display:none}
+  .tbl-wrap tr{border:1px solid var(--line);border-radius:10px;padding:8px 12px;margin-bottom:10px}
+  .tbl-wrap td{display:flex;justify-content:space-between;gap:12px;border:0;padding:4px 0;white-space:normal;text-align:right}
+  .tbl-wrap td::before{content:attr(data-l);color:var(--muted);font-size:13px;text-align:left}
+  .tbl-wrap td.who{font-weight:700;font-size:15px}
+  .tbl-wrap td.who::before{content:none}
+
+  .news li{grid-template-columns:1fr 76px;gap:12px}
+  .news img{width:76px;height:56px}
+  .kv{grid-template-columns:1fr;gap:2px}
+  .kv dd{margin-bottom:10px}
+  dialog{padding:20px}
+  dialog input{font-size:16px}
+  .foot{padding:0 12px 20px}
+}
+@media (prefers-reduced-motion: reduce){.flash-up,.flash-down{animation:none}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="brand">Market<span>Trace</span></div>
+  <div class="search" role="combobox" aria-expanded="false" aria-haspopup="listbox" aria-owns="results">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+    <input id="q" type="search" autocomplete="off" spellcheck="false" placeholder="Hledat ticker nebo firmu…" enterkeyhint="search" aria-label="Hledat ticker" aria-controls="results">
+    <ul id="results" class="results" role="listbox" hidden></ul>
+  </div>
+  <div class="status" aria-live="polite"><span id="dot" class="dot"></span><span id="statusText">Nepřipojeno</span></div>
+  <button id="keyBtn" class="ghost" type="button">API klíč</button>
+</header>
+
+<div class="wrap">
+  <aside class="side panel">
+    <h2>Sledované</h2>
+    <ul id="watch" class="watch"></ul>
+    <p class="side-note">Ceny akcií z USA se aktualizují v reálném čase z každého obchodu. Data: Finnhub, graf: TradingView.</p>
+  </aside>
+
+  <main class="main">
+    <section class="quote panel">
+      <div class="q-id">
+        <div id="logo" class="logo"></div>
+        <div>
+          <h1 id="sym">—</h1>
+          <p id="name">Vyhledejte ticker nahoře</p>
+        </div>
+        <button id="watchBtn" class="watch-btn" type="button" aria-pressed="false">Sledovat</button>
+      </div>
+      <div class="q-price">
+        <div id="price" class="price">—</div>
+        <div id="chg" class="chg">—</div>
+        <div class="meta"><span id="liveDot" class="dot"></span><span id="meta">Čekám na data</span></div>
+      </div>
+    </section>
+
+    <section id="chart" class="chart panel" aria-label="Cenový graf"></section>
+
+    <dl id="stats" class="stats panel"></dl>
+
+    <section class="panel">
+      <nav class="tabs" role="tablist">
+        <button role="tab" data-tab="insider" aria-selected="true">Insider obchody</button>
+        <button role="tab" data-tab="news" aria-selected="false">Zprávy</button>
+        <button role="tab" data-tab="analysts" aria-selected="false">Analytici</button>
+        <button role="tab" data-tab="profile" aria-selected="false">O firmě</button>
+      </nav>
+      <div id="tabpanel" class="tabpanel" role="tabpanel"></div>
+    </section>
+  </main>
+</div>
+
+<p class="foot">Údaje mají informativní charakter a nejsou investičním doporučením. Obchody insiderů pocházejí z hlášení Form 4 u SEC a zveřejňují se se zpožděním.</p>
+
+<dialog id="keyDlg">
+  <h2>Připojte živá data</h2>
+  <p>MarketTrace bere ceny, profily firem, zprávy a obchody insiderů z Finnhub. Bezplatný klíč zabere minutu.</p>
+  <ol>
+    <li>Zaregistrujte se na <a href="https://finnhub.io/register" target="_blank" rel="noopener">finnhub.io/register</a>.</li>
+    <li>Na nástěnce zkopírujte svůj API klíč.</li>
+    <li>Vložte ho sem. Uloží se jen ve vašem prohlížeči.</li>
+  </ol>
+  <form method="dialog" id="keyForm">
+    <input id="keyInput" placeholder="Vložte API klíč" autocomplete="off" spellcheck="false" aria-label="Finnhub API klíč">
+    <div id="keyErr" class="err" role="alert"></div>
+    <button class="primary" type="submit" id="keySave">Uložit a připojit</button>
+  </form>
+</dialog>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; }catch{ return d; } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)); }catch{} }
+};
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const isDark = () => matchMedia('(prefers-color-scheme: dark)').matches;
+
+const state = {
+  key: LS.get('mt_key', ''),
+  watch: LS.get('mt_watch', ['NVDA','AAPL','MSFT','AMZN','TSLA','AMD']),
+  sel: LS.get('mt_sel', 'NVDA'),
+  names: LS.get('mt_names', {}),
+  q: {}, profile: {}, metric: {}, rec: null, cache: {},
+  tab: 'insider', ws: null, subs: new Set(), wsTries: 0, wsOpen: false,
+  market: null, detailReq: 0, dirty: new Set()
+};
+
+/* ---------- formátování ---------- */
+const nfCache = {};
+const nf = (d) => nfCache[d] ||= new Intl.NumberFormat('cs-CZ', {minimumFractionDigits:d, maximumFractionDigits:d});
+const ok = v => v != null && !isNaN(v);
+const num = (v, d=2) => ok(v) ? nf(d).format(v) : '—';
+const cur = sym => (state.profile[sym] && state.profile[sym].currency) || 'USD';
+function money(v, c='USD'){
+  if(!ok(v)) return '—';
+  const d = Math.abs(v) < 1 ? 4 : 2;
+  try{ return new Intl.NumberFormat('cs-CZ',{style:'currency',currency:c,minimumFractionDigits:d,maximumFractionDigits:d}).format(v); }
+  catch{ return num(v,d) + ' ' + c; }
+}
+function big(v){
+  if(!ok(v)) return '—';
+  const a = Math.abs(v);
+  if(a >= 1e12) return num(v/1e12) + ' bil.';
+  if(a >= 1e9) return num(v/1e9) + ' mld.';
+  if(a >= 1e6) return num(v/1e6) + ' mil.';
+  if(a >= 1e3) return num(v/1e3,1) + ' tis.';
+  return num(v,0);
+}
+const pct = v => ok(v) ? (v > 0 ? '+' : '') + num(v) + ' %' : '—';
+const signed = v => ok(v) ? (v > 0 ? '+' : '') + num(v) : '—';
+const cls = v => !ok(v) || v === 0 ? '' : v > 0 ? 'up' : 'down';
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function ago(ms){
+  const s = (Date.now() - ms) / 1000;
+  if(s < 10) return 'právě teď';
+  if(s < 60) return `před ${Math.floor(s)} s`;
+  if(s < 3600) return `před ${Math.floor(s/60)} min`;
+  if(s < 86400) return `před ${Math.floor(s/3600)} h`;
+  return new Date(ms).toLocaleString('cs-CZ', {day:'numeric', month:'numeric', hour:'2-digit', minute:'2-digit'});
+}
+const dateCz = d => d ? new Date(d).toLocaleDateString('cs-CZ') : '—';
+const isoDay = d => d.toISOString().slice(0,10);
+
+/* ---------- API ---------- */
+class ApiError extends Error { constructor(code, msg){ super(msg); this.code = code; } }
+async function api(path, params = {}){
+  if(!state.key) throw new ApiError('nokey', 'Nejdřív vložte API klíč.');
+  const u = new URL('https://finnhub.io/api/v1' + path);
+  for(const [k,v] of Object.entries(params)) u.searchParams.set(k, v);
+  u.searchParams.set('token', state.key);
+  let r;
+  try{ r = await fetch(u); }
+  catch{ throw new ApiError('network', location.protocol === 'https:' || location.protocol === 'http:' ? 'Spojení s Finnhub selhalo. Zkontrolujte internet.' : 'Tady se data nenačtou. Otevřete stránku z webové adresy, např. po nahrání na váš hosting.'); }
+  if(r.status === 401) throw new ApiError('auth', 'API klíč není platný. Zkontrolujte ho v nastavení.');
+  if(r.status === 403) throw new ApiError('plan', 'Tato data nejsou v bezplatném tarifu Finnhub dostupná.');
+  if(r.status === 429) throw new ApiError('rate', 'Dosažen limit 60 dotazů za minutu. Data se doplní za chvíli.');
+  if(!r.ok) throw new ApiError('http', `Server vrátil chybu ${r.status}.`);
+  return r.json();
+}
+
+/* ---------- ceny ---------- */
+function setQuote(sym, q){
+  if(!q || (!q.c && !q.pc)) return false;
+  const c = state.q[sym] || {};
+  const qt = (q.t || 0) * 1000;
+  const liveNewer = c.liveTs && c.liveTs > qt;
+  state.q[sym] = { ...c,
+    price: liveNewer ? c.price : q.c,
+    pc: q.pc, o: q.o,
+    h: liveNewer ? Math.max(q.h, c.price) : q.h,
+    l: liveNewer ? Math.min(q.l, c.price) : q.l,
+    t: Math.max(qt, c.liveTs || 0)
+  };
+  markDirty(sym);
+  return true;
+}
+function onTrade(sym, p, t){
+  const c = state.q[sym] || {};
+  const dir = ok(c.price) ? Math.sign(p - c.price) : 0;
+  const n = { ...c, price: p, liveTs: t, t, dir: dir || c.dir || 0 };
+  if(ok(c.h) && p > c.h) n.h = p;
+  if(ok(c.l) && p < c.l) n.l = p;
+  state.q[sym] = n;
+  markDirty(sym);
+}
+let raf = 0;
+function markDirty(s){ state.dirty.add(s); if(!raf) raf = requestAnimationFrame(flush); }
+function flush(){
+  raf = 0;
+  for(const s of state.dirty){ renderWatchRow(s); if(s === state.sel){ renderPrice(); renderStats(); } }
+  state.dirty.clear();
+}
+function flash(el, dir){
+  if(!el || !dir) return;
+  el.classList.remove('flash-up','flash-down'); void el.offsetWidth;
+  el.classList.add(dir > 0 ? 'flash-up' : 'flash-down');
+}
+
+/* ---------- WebSocket (živé obchody) ---------- */
+const wanted = () => new Set([...state.watch, state.sel].filter(Boolean));
+function connectWS(){
+  if(!state.key) return;
+  const old = state.ws; state.ws = null;
+  try{ old && old.close(); }catch{}
+  state.wsOpen = false; state.subs = new Set(); renderStatus();
+  const ws = new WebSocket('wss://ws.finnhub.io?token=' + encodeURIComponent(state.key));
+  state.ws = ws;
+  ws.onopen = () => { state.wsTries = 0; state.wsOpen = true; renderStatus(); syncSubs(); };
+  ws.onmessage = e => {
+    let m; try{ m = JSON.parse(e.data); }catch{ return; }
+    if(m.type !== 'trade' || !Array.isArray(m.data)) return;
+    const last = {};
+    for(const t of m.data) if(!last[t.s] || t.t >= last[t.s].t) last[t.s] = t;
+    for(const s in last) onTrade(s, last[s].p, last[s].t);
+    state.lastTick = Date.now();
+  };
+  ws.onclose = () => {
+    if(state.ws !== ws) return;
+    state.wsOpen = false; renderStatus();
+    setTimeout(connectWS, Math.min(30000, 1500 * 2 ** state.wsTries++));
+  };
+}
+function syncSubs(){
+  const ws = state.ws;
+  if(!ws || ws.readyState !== 1) return;
+  const w = wanted();
+  for(const s of w) if(!state.subs.has(s)){ ws.send(JSON.stringify({type:'subscribe', symbol:s})); state.subs.add(s); }
+  for(const s of [...state.subs]) if(!w.has(s)){ ws.send(JSON.stringify({type:'unsubscribe', symbol:s})); state.subs.delete(s); }
+}
+
+/* ---------- průběžné doplňování ---------- */
+let polling = false;
+async function refreshQuotes(){
+  if(polling || !state.key) return;
+  polling = true;
+  try{
+    for(const s of wanted()){
+      try{ setQuote(s, await api('/quote', {symbol:s})); }
+      catch(e){ if(e.code === 'auth' || e.code === 'rate' || e.code === 'network') break; }
+      if(!state.names[s]){
+        try{
+          const p = await api('/stock/profile2', {symbol:s});
+          if(p && p.name){ state.names[s] = p.name; state.profile[s] ||= p; LS.set('mt_names', state.names); renderWatchRow(s); }
+        }catch{}
+      }
+      await sleep(250);
+    }
+  } finally { polling = false; }
+}
+async function loadMarket(){
+  try{ state.market = await api('/stock/market-status', {exchange:'US'}); }catch{}
+  renderStatus();
+}
+
+/* ---------- stav připojení ---------- */
+function renderStatus(){
+  const dot = $('#dot'), txt = $('#statusText');
+  if(!state.key){ dot.className = 'dot off'; txt.textContent = 'Chybí API klíč'; return; }
+  if(!state.wsOpen){ dot.className = 'dot warn'; txt.textContent = 'Připojuji…'; return; }
+  const m = state.market;
+  const sess = m && m.isOpen ? ({'pre-market':'předobchodní seance','regular':'trh otevřen','post-market':'poobchodní seance'}[m.session] || 'trh otevřen') : 'trh USA zavřen';
+  dot.className = 'dot ' + (m && m.isOpen ? 'live' : '');
+  txt.textContent = (m && m.isOpen ? 'Živě' : 'Připojeno') + ', ' + sess;
+}
+
+/* ---------- watchlist ---------- */
+function renderWatch(){
+  const ul = $('#watch');
+  if(!state.watch.length){ ul.innerHTML = '<li class="empty">Zatím nic nesledujete. Vyhledejte ticker a klikněte na Sledovat.</li>'; return; }
+  ul.innerHTML = state.watch.map(s => `
+    <li class="w-row" data-sym="${esc(s)}">
+      <button class="w-main" type="button" data-pick="${esc(s)}">
+        <span class="w-sym">${esc(s)}</span>
+        <span class="w-name"></span>
+        <span class="w-px">—</span>
+        <span class="w-chg">—</span>
+      </button>
+      <button class="w-x" type="button" data-remove="${esc(s)}" aria-label="Přestat sledovat ${esc(s)}">×</button>
+    </li>`).join('');
+  state.watch.forEach(renderWatchRow);
+}
+function renderWatchRow(s){
+  const row = document.querySelector(`.w-row[data-sym="${CSS.escape(s)}"]`);
+  if(!row) return;
+  row.classList.toggle('sel', s === state.sel);
+  row.querySelector('.w-name').textContent = state.names[s] || '';
+  const q = state.q[s];
+  if(!q || !ok(q.price)) return;
+  const ch = ok(q.pc) && q.pc ? (q.price - q.pc) / q.pc * 100 : null;
+  const px = row.querySelector('.w-px');
+  px.textContent = num(q.price);
+  const c = row.querySelector('.w-chg');
+  c.textContent = pct(ch); c.className = 'w-chg ' + cls(ch);
+  if(q.dir && q.liveTs && Date.now() - q.liveTs < 1500){ flash(px, q.dir); }
+}
+$('#watch').addEventListener('click', e => {
+  const r = e.target.closest('[data-remove]');
+  if(r){ toggleWatch(r.dataset.remove, false); return; }
+  const p = e.target.closest('[data-pick]');
+  if(p) selectTicker(p.dataset.pick);
+});
+function toggleWatch(sym, on){
+  const has = state.watch.includes(sym);
+  if(on === undefined) on = !has;
+  if(on && !has) state.watch.push(sym);
+  if(!on && has) state.watch = state.watch.filter(x => x !== sym);
+  LS.set('mt_watch', state.watch);
+  renderWatch(); renderWatchBtn(); syncSubs();
+  if(on) refreshQuotes();
+}
+function renderWatchBtn(){
+  const b = $('#watchBtn'), on = state.watch.includes(state.sel);
+  b.setAttribute('aria-pressed', on); b.textContent = on ? 'Sledováno' : 'Sledovat';
+}
+$('#watchBtn').addEventListener('click', () => state.sel && toggleWatch(state.sel));
+
+/* ---------- vyhledávání ---------- */
+const qIn = $('#q'), resEl = $('#results'), combo = document.querySelector('.search');
+let searchT, searchId = 0, results = [], active = -1;
+function openRes(){ resEl.hidden = false; combo.setAttribute('aria-expanded','true'); }
+function closeRes(){ resEl.hidden = true; combo.setAttribute('aria-expanded','false'); active = -1; }
+qIn.addEventListener('input', () => {
+  clearTimeout(searchT);
+  const v = qIn.value.trim();
+  if(!v){ closeRes(); return; }
+  searchT = setTimeout(() => doSearch(v), 260);
+});
+async function doSearch(v){
+  const id = ++searchId;
+  openRes(); resEl.innerHTML = '<li class="r-note">Hledám…</li>';
+  try{
+    const r = await api('/search', {q: v});
+    if(id !== searchId) return;
+    const V = v.toUpperCase();
+    results = (r.result || []).sort((a,b) => rank(b,V) - rank(a,V)).slice(0, 12);
+    active = results.length ? 0 : -1;
+    renderResults(v);
+  }catch(e){
+    if(id !== searchId) return;
+    results = []; resEl.innerHTML = `<li class="r-note">${esc(e.message)}</li>`;
+  }
+}
+function rank(x, V){
+  let s = 0;
+  if(x.symbol === V) s += 100;
+  if(x.displaySymbol && x.displaySymbol.startsWith(V)) s += 20;
+  if(!x.symbol.includes('.')) s += 30;
+  if(x.type === 'Common Stock') s += 10;
+  return s;
+}
+function renderResults(v){
+  if(!results.length){
+    resEl.innerHTML = `<li class="r-note">Nic nenalezeno pro „${esc(v)}“. Zkuste přesný ticker, např. AAPL.</li>`;
+    return;
+  }
+  resEl.innerHTML = results.map((r, i) => `
+    <li role="option" id="opt${i}" data-i="${i}" aria-selected="${i === active}">
+      <b>${esc(r.displaySymbol || r.symbol)}</b>
+      <span class="r-desc">${esc(r.description)}</span>
+      <em>${esc(typeCz(r.type))}</em>
+    </li>`).join('');
+  qIn.setAttribute('aria-activedescendant', active >= 0 ? 'opt' + active : '');
+}
+const typeCz = t => ({'Common Stock':'Akcie','ETP':'ETF','ADR':'ADR','REIT':'REIT','Closed-End Fund':'Fond','Open-End Fund':'Fond','Preference':'Prioritní'}[t] || t || '');
+resEl.addEventListener('mousedown', e => {
+  const li = e.target.closest('[data-i]');
+  if(li){ e.preventDefault(); pick(results[+li.dataset.i]); }
+});
+qIn.addEventListener('keydown', e => {
+  if(e.key === 'ArrowDown' || e.key === 'ArrowUp'){
+    if(!results.length) return;
+    e.preventDefault();
+    active = (active + (e.key === 'ArrowDown' ? 1 : -1) + results.length) % results.length;
+    renderResults(qIn.value);
+    document.getElementById('opt' + active)?.scrollIntoView({block:'nearest'});
+  } else if(e.key === 'Enter'){
+    e.preventDefault();
+    if(active >= 0 && results[active]) pick(results[active]);
+    else if(qIn.value.trim()) selectTicker(qIn.value.trim().toUpperCase());
+  } else if(e.key === 'Escape'){ closeRes(); qIn.blur(); }
+});
+qIn.addEventListener('blur', () => setTimeout(closeRes, 120));
+function pick(r){
+  if(!r) return;
+  if(r.description && !state.names[r.symbol]){ state.names[r.symbol] = r.description; LS.set('mt_names', state.names); }
+  selectTicker(r.symbol);
+}
+document.addEventListener('keydown', e => {
+  if(e.key === '/' && document.activeElement !== qIn && !e.target.closest('input,textarea')){ e.preventDefault(); qIn.focus(); }
+});
+
+/* ---------- detail tickeru ---------- */
+function selectTicker(sym){
+  state.sel = sym; LS.set('mt_sel', sym);
+  qIn.value = ''; closeRes();
+  state.watch.forEach(renderWatchRow);
+  syncSubs();
+  loadDetail(sym);
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+async function loadDetail(sym){
+  const my = ++state.detailReq;
+  $('#sym').textContent = sym;
+  $('#name').textContent = state.names[sym] || 'Načítám…';
+  $('#logo').textContent = sym.slice(0,2);
+  renderWatchBtn(); renderPrice(); renderStats();
+  $('#tabpanel').innerHTML = '<p class="note">Načítám…</p>';
+  mountChart(sym);
+  const [q, p, m, rec] = await Promise.allSettled([
+    api('/quote', {symbol:sym}),
+    api('/stock/profile2', {symbol:sym}),
+    api('/stock/metric', {symbol:sym, metric:'all'}),
+    api('/stock/recommendation', {symbol:sym})
+  ]);
+  if(my !== state.detailReq) return;
+  const gotQuote = q.status === 'fulfilled' && setQuote(sym, q.value);
+  const prof = p.status === 'fulfilled' ? (p.value || {}) : {};
+  state.profile[sym] = prof;
+  if(prof.name){ state.names[sym] = prof.name; LS.set('mt_names', state.names); renderWatchRow(sym); }
+  state.metric = m.status === 'fulfilled' ? ((m.value && m.value.metric) || {}) : {};
+  state.rec = rec.status === 'fulfilled' ? rec.value : null;
+  renderHeader(sym);
+  if(!gotQuote){
+    const err = q.status === 'rejected' ? q.reason.message : 'Pro tento ticker nejsou v bezplatném tarifu dostupné ceny. Živé ceny fungují pro akcie a ETF z USA.';
+    $('#meta').textContent = err;
+  }
+  renderPrice(); renderStats();
+  loadTab(state.tab);
+}
+function renderHeader(sym){
+  const p = state.profile[sym] || {};
+  $('#name').textContent = [p.name || state.names[sym], p.exchange && p.exchange.split(' ')[0]].filter(Boolean).join(', ') || 'Neznámý titul';
+  const lg = $('#logo');
+  if(p.logo){ lg.innerHTML = `<img alt="" src="${esc(p.logo)}">`; lg.querySelector('img').onerror = () => { lg.textContent = sym.slice(0,2); }; }
+  else lg.textContent = sym.slice(0,2);
+}
+function renderPrice(){
+  const sym = state.sel, q = state.q[sym];
+  const pEl = $('#price'), cEl = $('#chg');
+  if(!q || !ok(q.price)){ pEl.textContent = '—'; cEl.textContent = '—'; cEl.className = 'chg'; $('#liveDot').className = 'dot'; return; }
+  pEl.textContent = money(q.price, cur(sym));
+  const d = ok(q.pc) ? q.price - q.pc : null, dp = d != null && q.pc ? d / q.pc * 100 : null;
+  cEl.textContent = `${signed(d)} (${pct(dp)}) dnes`;
+  cEl.className = 'chg ' + cls(d);
+  if(q.dir && q.liveTs && Date.now() - q.liveTs < 1500) flash(pEl, q.dir);
+  renderMeta();
+  document.title = `${sym} ${num(q.price)} ${pct(dp)} | MarketTrace`;
+}
+function renderMeta(){
+  const q = state.q[state.sel];
+  if(!q || !ok(q.price)) return;
+  const live = q.liveTs && Date.now() - q.liveTs < 60000;
+  $('#liveDot').className = 'dot ' + (live ? 'live' : '');
+  $('#meta').textContent = live ? `Živě, poslední obchod ${ago(q.liveTs)}` : `Poslední cena ${q.t ? ago(q.t) : ''}`;
+}
+function renderStats(){
+  const sym = state.sel, q = state.q[sym] || {}, m = state.metric || {}, p = state.profile[sym] || {}, c = cur(sym);
+  const pe = m.peTTM ?? m.peBasicExclExtraTTM ?? m.peExclExtraTTM;
+  const eps = m.epsTTM ?? m.epsBasicExclExtraItemsTTM ?? m.epsExclExtraItemsTTM;
+  const rng = (a, b) => ok(a) && ok(b) ? `${num(a)} – ${num(b)}` : '—';
+  const items = [
+    ['Otevírací cena', money(q.o, c)],
+    ['Předchozí závěr', money(q.pc, c)],
+    ['Denní rozpětí', rng(q.l, q.h)],
+    ['52týdenní rozpětí', rng(m['52WeekLow'], m['52WeekHigh'])],
+    ['Tržní kapitalizace', ok(p.marketCapitalization) ? big(p.marketCapitalization * 1e6) + ' ' + c : '—'],
+    ['P/E (TTM)', num(pe)],
+    ['EPS (TTM)', num(eps)],
+    ['Beta', num(m.beta)],
+    ['Dividendový výnos', ok(m.dividendYieldIndicatedAnnual) ? num(m.dividendYieldIndicatedAnnual) + ' %' : '—'],
+    ['Prům. objem (10 dní)', ok(m['10DayAverageTradingVolume']) ? big(m['10DayAverageTradingVolume'] * 1e6) + ' ks' : '—']
+  ];
+  $('#stats').innerHTML = items.map(([k,v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+}
+
+/* ---------- graf TradingView ---------- */
+let tvPromise;
+function loadTV(){
+  if(window.TradingView) return Promise.resolve();
+  return tvPromise ||= new Promise((res, rej) => {
+    const s = document.createElement('script');
+    s.src = 'https://s3.tradingview.com/tv.js'; s.onload = res; s.onerror = () => { tvPromise = null; rej(); };
+    document.head.appendChild(s);
+  });
+}
+async function mountChart(sym){
+  const box = $('#chart');
+  box.innerHTML = '<div id="tvc" style="height:100%"></div>';
+  try{
+    await loadTV();
+    if(sym !== state.sel) return;
+    new TradingView.widget({
+      container_id:'tvc', symbol: sym.replace(/\.US$/,''), interval:'D', timezone:'Europe/Prague',
+      theme: isDark() ? 'dark' : 'light', style:'1', locale:'cs', autosize:true,
+      hide_side_toolbar:true, allow_symbol_change:false, save_image:false, withdateranges:true
+    });
+  }catch{
+    box.innerHTML = '<p class="note">Graf TradingView se nepodařilo načíst. Zkontrolujte připojení nebo blokátor reklam.</p>';
+  }
+}
+
+/* ---------- záložky ---------- */
+document.querySelector('.tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if(!b) return;
+  state.tab = b.dataset.tab;
+  document.querySelectorAll('.tabs [data-tab]').forEach(x => x.setAttribute('aria-selected', x === b));
+  loadTab(state.tab);
+});
+async function loadTab(tab){
+  const sym = state.sel, panel = $('#tabpanel'), key = sym + ':' + tab;
+  if(tab === 'analysts'){ panel.innerHTML = renderAnalysts(); return; }
+  if(tab === 'profile'){ panel.innerHTML = renderProfile(sym); return; }
+  if(state.cache[key]){ panel.innerHTML = state.cache[key]; return; }
+  panel.innerHTML = '<p class="note">Načítám…</p>';
+  try{
+    let html;
+    if(tab === 'insider'){
+      const r = await api('/stock/insider-transactions', {symbol:sym});
+      html = renderInsiders(r.data || [], sym);
+    } else {
+      const to = new Date(), from = new Date(Date.now() - 14 * 864e5);
+      const r = await api('/company-news', {symbol:sym, from:isoDay(from), to:isoDay(to)});
+      html = renderNews(Array.isArray(r) ? r : []);
+    }
+    state.cache[key] = html;
+    setTimeout(() => delete state.cache[key], 5 * 60000);
+    if(state.sel === sym && state.tab === tab) panel.innerHTML = html;
+  }catch(e){
+    if(state.sel === sym && state.tab === tab) panel.innerHTML = `<p class="note">${esc(e.message)}</p>`;
+  }
+}
+const CODES = {P:['Nákup','buy'], S:['Prodej','sell'], A:['Přidělení',''], M:['Uplatnění opce',''], F:['Odvod daně','sell'], G:['Dar',''], D:['Předání',''], C:['Konverze',''], X:['Uplatnění opce',''], J:['Jiné','']};
+function renderInsiders(rows, sym){
+  if(!rows.length) return '<p class="note">Za poslední období nejsou hlášeny žádné obchody insiderů.</p>';
+  rows.sort((a,b) => (b.filingDate || '').localeCompare(a.filingDate || '') || (b.transactionDate || '').localeCompare(a.transactionDate || ''));
+  const c = cur(sym), since = Date.now() - 90 * 864e5;
+  let buy = 0, sell = 0;
+  for(const r of rows){
+    if(new Date(r.transactionDate) < since) continue;
+    const v = Math.abs(r.change || 0) * (r.transactionPrice || 0);
+    if(r.transactionCode === 'P') buy += v;
+    if(r.transactionCode === 'S') sell += v;
+  }
+  const body = rows.slice(0, 40).map(r => {
+    const [label, k] = CODES[r.transactionCode] || [r.transactionCode || '—', ''];
+    const val = Math.abs(r.change || 0) * (r.transactionPrice || 0);
+    return `<tr>
+      <td data-l="Datum obchodu">${dateCz(r.transactionDate)}</td>
+      <td class="who" data-l="Osoba">${esc(titleCase(r.name))}</td>
+      <td data-l="Typ"><span class="tag ${k}">${label}</span></td>
+      <td class="num ${cls(r.change)}" data-l="Změna (ks)">${signed(r.change).replace(',00','')}</td>
+      <td class="num" data-l="Cena">${r.transactionPrice ? money(r.transactionPrice, c) : '—'}</td>
+      <td class="num" data-l="Hodnota">${val ? big(val) : '—'}</td>
+      <td class="num" data-l="Drží po obchodu">${ok(r.share) ? big(r.share) : '—'}</td>
+      <td data-l="Zveřejněno">${dateCz(r.filingDate)}</td>
+    </tr>`;
+  }).join('');
+  return `<div class="summary">
+      <div>Nákupy za 90 dní<br><b class="up">${big(buy)} ${c}</b></div>
+      <div>Prodeje za 90 dní<br><b class="down">${big(sell)} ${c}</b></div>
+    </div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>Obchod</th><th>Osoba</th><th>Typ</th><th class="num">Změna (ks)</th><th class="num">Cena</th><th class="num">Hodnota</th><th class="num">Drží po obchodu</th><th>Zveřejněno</th></tr></thead>
+      <tbody>${body}</tbody></table></div>`;
+}
+const titleCase = s => String(s || '').toLowerCase().replace(/\b\p{L}/gu, c => c.toUpperCase());
+function renderNews(items){
+  if(!items.length) return '<p class="note">Za posledních 14 dní nejsou k tomuto titulu žádné zprávy.</p>';
+  items.sort((a,b) => b.datetime - a.datetime);
+  return '<ul class="news">' + items.slice(0, 25).map(n => `
+    <li><div>
+      <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.headline)}</a>
+      ${n.summary ? `<p>${esc(n.summary)}</p>` : ''}
+      <small>${esc(n.source)}, ${ago(n.datetime * 1000)}</small>
+    </div>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy" onerror="this.remove()">` : ''}</li>`).join('') + '</ul>';
+}
+function renderAnalysts(){
+  const recs = Array.isArray(state.rec) ? state.rec : [];
+  if(!recs.length) return '<p class="note">Pro tento titul nejsou k dispozici doporučení analytiků.</p>';
+  const parts = [['strongBuy','Silně koupit','#0E7A42'],['buy','Koupit','#34B36A'],['hold','Držet','#C9A227'],['sell','Prodat','#E0707A'],['strongSell','Silně prodat','#B3242F']];
+  const block = (r, full) => {
+    const tot = parts.reduce((s,[k]) => s + (r[k] || 0), 0) || 1;
+    return `<div style="margin-bottom:${full ? 22 : 14}px">
+      <div style="font-weight:700">${new Date(r.period).toLocaleDateString('cs-CZ',{month:'long',year:'numeric'})}<span style="color:var(--muted);font-weight:500">, ${tot} analytiků</span></div>
+      <div class="rec-bar">${parts.map(([k,,col]) => r[k] ? `<span style="width:${r[k]/tot*100}%;background:${col}" title="${r[k]}"></span>` : '').join('')}</div>
+      ${full ? `<div class="rec-legend">${parts.map(([k,l,col]) => `<span><i style="background:${col}"></i>${l}: <b style="color:var(--ink)">${r[k] || 0}</b></span>`).join('')}</div>` : ''}
+    </div>`;
+  };
+  return block(recs[0], true) + recs.slice(1, 4).map(r => block(r, false)).join('') +
+    '<p class="note" style="font-size:13px">Souhrn doporučení analytiků. Nejde o investiční doporučení MarketTrace.</p>';
+}
+function renderProfile(sym){
+  const p = state.profile[sym] || {};
+  if(!p.name) return '<p class="note">Profil firmy není pro tento titul k dispozici.</p>';
+  const rows = [
+    ['Název', esc(p.name)], ['Odvětví', esc(p.finnhubIndustry || '—')], ['Burza', esc(p.exchange || '—')],
+    ['Země', esc(p.country || '—')], ['Měna', esc(p.currency || '—')], ['Na burze od', dateCz(p.ipo)],
+    ['Akcií v oběhu', ok(p.shareOutstanding) ? big(p.shareOutstanding * 1e6) : '—'],
+    ['Web', p.weburl ? `<a href="${esc(p.weburl)}" target="_blank" rel="noopener">${esc(p.weburl.replace(/^https?:\/\//,''))}</a>` : '—']
+  ];
+  return '<dl class="kv">' + rows.map(([k,v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('') + '</dl>';
+}
+
+/* ---------- API klíč ---------- */
+const dlg = $('#keyDlg');
+$('#keyBtn').addEventListener('click', () => { $('#keyInput').value = state.key; $('#keyErr').textContent = ''; dlg.showModal(); });
+$('#keyForm').addEventListener('submit', async e => {
+  e.preventDefault();
+  let v = $('#keyInput').value.replace(/\s+/g,'');
+  if(v.length % 2 === 0 && v.slice(0, v.length/2) === v.slice(v.length/2)) v = v.slice(0, v.length/2);
+  $('#keyInput').value = v;
+  const err = $('#keyErr'), btn = $('#keySave');
+  if(!v){ err.textContent = 'Vložte klíč z nástěnky Finnhub.'; return; }
+  btn.disabled = true; btn.textContent = 'Ověřuji…'; err.textContent = '';
+  const prev = state.key; state.key = v;
+  try{
+    await api('/quote', {symbol:'AAPL'});
+    LS.set('mt_key', v); dlg.close(); start();
+  }catch(ex){
+    state.key = prev; err.textContent = ex.message;
+  }finally{ btn.disabled = false; btn.textContent = 'Uložit a připojit'; }
+});
+
+/* ---------- start ---------- */
+let timers = [];
+function start(){
+  timers.forEach(clearInterval); timers = [];
+  state.cache = {};
+  renderWatch(); renderStatus();
+  connectWS(); loadMarket(); loadDetail(state.sel);
+  setTimeout(refreshQuotes, 1200);
+  timers.push(setInterval(refreshQuotes, 30000));
+  timers.push(setInterval(loadMarket, 5 * 60000));
+  timers.push(setInterval(renderMeta, 5000));
+}
+document.addEventListener('visibilitychange', () => {
+  if(document.hidden || !state.key) return;
+  if(!state.ws || state.ws.readyState > 1){ state.wsTries = 0; connectWS(); }
+  refreshQuotes(); loadMarket();
+});
+window.addEventListener('online', () => { if(state.key){ state.wsTries = 0; connectWS(); refreshQuotes(); } });
+renderWatch(); renderStatus(); renderStats();
+$('#sym').textContent = state.sel;
+if(state.key) start(); else dlg.showModal();
+})();
+</script>
+</body>
+</html>
