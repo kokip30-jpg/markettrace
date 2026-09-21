@@ -1,0 +1,56 @@
+name: Data SEC a nasazení webu
+
+on:
+  schedule:
+    - cron: '7,27,47 * * * 1-5'   # pracovní dny každých 20 minut
+    - cron: '17 */4 * * 0,6'      # víkend každé 4 hodiny
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: ['data/**']
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: markettrace
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Stáhnout data ze SEC
+        run: python scripts/update.py
+
+      - name: Uložit data do repozitáře
+        run: |
+          git config user.name "markettrace-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data
+          if ! git diff --cached --quiet; then
+            git commit -q -m "Data SEC $(date -u +'%Y-%m-%d %H:%M') UTC"
+            git pull -q --rebase -X ours origin main || true
+            git push -q
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deploy
+        uses: actions/deploy-pages@v4
