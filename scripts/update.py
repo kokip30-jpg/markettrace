@@ -36,14 +36,15 @@ def time_left():
 # ---------------------------------------------------------------- HTTP
 _last_sec = [0.0]
 DEBUG = {'errors': [], 'probe': []}
-UA_CANDIDATES = [
-    UA,
-    'MarketTrace/1.0 (+https://github.com/kokip30-jpg/markettrace; kokip30-jpg@users.noreply.github.com)',
-    'Mozilla/5.0 (compatible; MarketTrace/1.0; +https://github.com/kokip30-jpg/markettrace) kokip30-jpg@users.noreply.github.com',
-]
+UA_CANDIDATES = [UA, 'Pavel admin@masaze-tisnov.cz', 'MarketTrace admin@masaze-tisnov.cz']
 
 
 def note_error(url, code, body=b''):
+    try:
+        body = gzip.decompress(body)
+    except Exception:
+        pass
+    body = re.sub(rb'<[^>]*>|\s+', b' ', body or b'')
     if len(DEBUG['errors']) < 25:
         DEBUG['errors'].append({'url': url[:160], 'code': code,
                                 'body': (body or b'')[:300].decode('utf-8', 'replace')})
@@ -61,7 +62,8 @@ def probe_sec():
                 UA = ua
                 return True
         except urllib.error.HTTPError as e:
-            DEBUG['probe'].append({'ua': ua, 'code': e.code, 'body': e.read()[:300].decode('utf-8', 'replace')})
+            note_error('probe ' + ua, e.code, e.read())
+            DEBUG['probe'].append({'ua': ua, 'code': e.code})
         except Exception as e:
             DEBUG['probe'].append({'ua': ua, 'error': repr(e)[:200]})
         time.sleep(2)
@@ -75,7 +77,7 @@ def http(url, data=None, headers=None, tries=4):
     is_sec = 'sec.gov' in url
     for i in range(tries):
         if is_sec:  # SEC povoluje max. 10 dotazů za sekundu
-            wait = 0.13 - (time.time() - _last_sec[0])
+            wait = 0.15 - (time.time() - _last_sec[0])
             if wait > 0:
                 time.sleep(wait)
             _last_sec[0] = time.time()
@@ -578,6 +580,8 @@ def update_gurus(tmap):
 def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
+    if meta.get('feed', {}).get('buys', 0) == 0 and meta.get('feed', {}).get('sells', 0) == 0:
+        meta.pop('backfilled', None)  # historie se zatím nestáhla
     if not probe_sec():
         log('SEC odmítá dotazy:', DEBUG['probe'])
         meta['error'] = 'SEC odmítá dotazy'

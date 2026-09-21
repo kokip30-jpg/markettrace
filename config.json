@@ -1,18 +1,82 @@
 {
-  "user_agent": "MarketTrace kokip30-jpg@users.noreply.github.com",
-  "tickers": ["NVDA","AAPL","MSFT","AMZN","TSLA","AMD","GOOGL","META","AVGO","NFLX","PLTR","JPM","V","LLY","UNH","COST","WMT","XOM","ORCL","CRM","INTC","SMCI","COIN","MSTR","UBER","DIS","BA","PYPL","ABNB","MU"],
+  "user_agent": "MarketTrace Pavel admin@masaze-tisnov.cz",
+  "tickers": [
+    "NVDA",
+    "AAPL",
+    "MSFT",
+    "AMZN",
+    "TSLA",
+    "AMD",
+    "GOOGL",
+    "META",
+    "AVGO",
+    "NFLX",
+    "PLTR",
+    "JPM",
+    "V",
+    "LLY",
+    "UNH",
+    "COST",
+    "WMT",
+    "XOM",
+    "ORCL",
+    "CRM",
+    "INTC",
+    "SMCI",
+    "COIN",
+    "MSTR",
+    "UBER",
+    "DIS",
+    "BA",
+    "PYPL",
+    "ABNB",
+    "MU"
+  ],
   "gurus": [
-    {"label": "Warren Buffett", "cik": 1067983},
-    {"label": "Michael Burry", "cik": 1649339},
-    {"label": "Bill Ackman", "cik": 1336528},
-    {"label": "Stanley Druckenmiller", "cik": 1536411},
-    {"label": "David Tepper", "cik": 1656456},
-    {"label": "Seth Klarman", "cik": 1061768},
-    {"label": "Li Lu", "cik": 1709323},
-    {"label": "David Einhorn", "cik": 1079114},
-    {"label": "Dan Loeb", "cik": 1040273},
-    {"label": "Carl Icahn", "cik": 921669},
-    {"label": "Chase Coleman", "cik": 1167483}
+    {
+      "label": "Warren Buffett",
+      "cik": 1067983
+    },
+    {
+      "label": "Michael Burry",
+      "cik": 1649339
+    },
+    {
+      "label": "Bill Ackman",
+      "cik": 1336528
+    },
+    {
+      "label": "Stanley Druckenmiller",
+      "cik": 1536411
+    },
+    {
+      "label": "David Tepper",
+      "cik": 1656456
+    },
+    {
+      "label": "Seth Klarman",
+      "cik": 1061768
+    },
+    {
+      "label": "Li Lu",
+      "cik": 1709323
+    },
+    {
+      "label": "David Einhorn",
+      "cik": 1079114
+    },
+    {
+      "label": "Dan Loeb",
+      "cik": 1040273
+    },
+    {
+      "label": "Carl Icahn",
+      "cik": 921669
+    },
+    {
+      "label": "Chase Coleman",
+      "cik": 1167483
+    }
   ],
   "backfill_days": 5,
   "feed_pages": 4,
