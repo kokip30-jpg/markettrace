@@ -14,6 +14,15 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 - portfolia guru investorů: SEC Form 13F;
 - kurz USD/CZK: Česká národní banka.
 
+## Analytické funkce
+
+- vysvětlitelné MarketTrace skóre rozdělené na trend, momentum, objem, Smart Money a stabilitu;
+- pokročilý screener podle relativního objemu, insider nákupů, 52týdenního pásma a skóre;
+- časová osa cenových a SEC událostí v detailu akcie;
+- cluster nákupy více insiderů z jedné společnosti;
+- porovnání dvou až čtyř akcií;
+- Smart Money přehled nových, navýšených, snížených a ukončených 13F pozic.
+
 Automat běží v pracovní dny každých 5 minut a o víkendu každé 2 hodiny. GitHub může naplánovaný běh při vytížení opozdit.
 
 ## Struktura
