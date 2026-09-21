@@ -42,8 +42,11 @@ jobs:
           git add data
           if ! git diff --cached --quiet; then
             git commit -q -m "Data SEC $(date -u +'%Y-%m-%d %H:%M') UTC"
-            git pull -q --rebase -X ours origin main || true
-            git push -q
+            for i in 1 2 3 4 5; do
+              git pull -q --rebase -X theirs origin main && git push -q && break
+              git rebase --abort 2>/dev/null || true
+              sleep $((i * 5))
+            done
           fi
 
       - uses: actions/configure-pages@v5
