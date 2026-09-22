@@ -1,0 +1,20 @@
+name: Diagnostika cílových cen
+on: workflow_dispatch
+permissions:
+  contents: write
+jobs:
+  d:
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          mkdir out; cd out
+          H=(-H "User-Agent: Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36" -H "Accept: application/json, text/plain, */*" -H "Origin: https://www.nasdaq.com" -H "Referer: https://www.nasdaq.com/")
+          for s in NVDA RKLB; do
+            curl -s --compressed "${H[@]}" -w "\nHTTP %{http_code}\n" "https://api.nasdaq.com/api/analyst/$s/targetprice" > tp_$s.txt
+            curl -s --compressed "${H[@]}" -w "\nHTTP %{http_code}\n" "https://api.nasdaq.com/api/analyst/$s/ratings" > rt_$s.txt
+          done
+          git init -q -b diag; git add .; git -c user.name=bot -c user.email=bot@x commit -q -m d
+          git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" diag
