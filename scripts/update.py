@@ -1497,6 +1497,38 @@ def notify(meta, f144, f13d, gurus_before, gurus_now):
 
 
 # ---------------------------------------------------------------- hlavní běh
+# ---------------------------------------------------------------- cílové ceny analytiků (Nasdaq)
+def update_targets(symbols):
+    hdr = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+           'Accept': 'application/json, text/plain, */*', 'Origin': 'https://www.nasdaq.com', 'Referer': 'https://www.nasdaq.com/'}
+    done = 0
+    for sym in symbols:
+        if not time_left():
+            break
+        old = load(f'targets/{sym}.json', None)
+        if old and old.get('updated', '')[:10] == TODAY.isoformat():
+            continue
+        b = http(f'https://api.nasdaq.com/api/analyst/{urllib.parse.quote(sym)}/targetprice', headers=hdr)
+        if not b:
+            continue
+        try:
+            data = json.loads(b).get('data') or {}
+        except ValueError:
+            continue
+        co = data.get('consensusOverview') or {}
+        out = {'t': sym, 'updated': NOW.isoformat(),
+               'low': fnum(co.get('lowPriceTarget')), 'high': fnum(co.get('highPriceTarget')),
+               'avg': fnum(co.get('priceTarget')),
+               'buy': int(co.get('buy') or 0), 'hold': int(co.get('hold') or 0), 'sell': int(co.get('sell') or 0)}
+        if not out['avg']:
+            out = {'t': sym, 'updated': NOW.isoformat(), 'none': True}
+        save(f'targets/{sym}.json', out)
+        done += 1
+        time.sleep(0.3)
+    if done:
+        log('cílové ceny analytiků:', done, 'titulů')
+
+
 def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
@@ -1546,6 +1578,11 @@ def main():
             meta['fundamentals_at'] = NOW.isoformat()
             meta['fundamentals_count'] = fundamental_ok
             meta['fundamentals_schema'] = 2
+
+    try:
+        update_targets(tickers)
+    except Exception as e:
+        log('CHYBA cílové ceny:', repr(e))
 
     # Zbytek sběru (Form 4, 8-K, 13F) vyžaduje SEC. Když SEC blokuje
     # GitHub runner, zachováme starší SEC data, ale fundamenty z Nasdaq už jsou uložené.
