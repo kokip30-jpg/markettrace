@@ -435,6 +435,191 @@ def update_ticker(sym, tmap):
     return True
 
 
+# ---------------------------------------------------------------- fundamenty + udalosti 8-K
+DURATION_FACTS = {
+    'revenue': ('RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues',
+                'SalesRevenueNet', 'SalesRevenueGoodsNet'),
+    'net_income': ('NetIncomeLoss', 'ProfitLoss'),
+    'operating_income': ('OperatingIncomeLoss',),
+    'operating_cash': ('NetCashProvidedByUsedInOperatingActivities',
+                       'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'),
+    'capex': ('PaymentsToAcquirePropertyPlantAndEquipment',
+              'PaymentsForAdditionsToPropertyPlantAndEquipment'),
+    'eps_diluted': ('EarningsPerShareDiluted',),
+}
+INSTANT_FACTS = {
+    'cash': ('CashAndCashEquivalentsAtCarryingValue',
+             'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'),
+    'assets': ('Assets',),
+    'liabilities': ('Liabilities',),
+    'equity': ('StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'),
+    'shares': ('EntityCommonStockSharesOutstanding', 'CommonStockSharesOutstanding'),
+    'debt_current': ('LongTermDebtCurrent', 'ShortTermBorrowings'),
+    'debt_long': ('LongTermDebtNoncurrent', 'LongTermDebt'),
+}
+EVENT_LABELS = {
+    '1.01': 'Významná smlouva', '1.02': 'Ukončení významné smlouvy', '1.03': 'Úpadek nebo nucená správa',
+    '2.01': 'Akvizice nebo prodej aktiv', '2.02': 'Výsledky a finanční situace',
+    '2.03': 'Nový významný dluh', '2.04': 'Urychlení nebo zesplatnění závazku',
+    '2.05': 'Náklady na restrukturalizaci', '2.06': 'Významné snížení hodnoty aktiv',
+    '3.01': 'Oznámení burzy nebo vyřazení', '3.02': 'Neregistrovaný prodej akcií',
+    '3.03': 'Změna práv držitelů akcií', '4.01': 'Změna auditora', '4.02': 'Účetní závěrka již není spolehlivá',
+    '5.01': 'Změna kontroly společnosti', '5.02': 'Změna vedení nebo představenstva',
+    '5.03': 'Změna stanov', '5.07': 'Výsledky hlasování akcionářů',
+    '7.01': 'Regulation FD – nové veřejné sdělení', '8.01': 'Jiná významná událost',
+    '9.01': 'Finanční výkazy a přílohy',
+}
+
+
+def fact_units(companyfacts, concepts):
+    schemas = companyfacts.get('facts') or {}
+    for schema in ('us-gaap', 'dei'):
+        facts = schemas.get(schema) or {}
+        for concept in concepts:
+            units = (facts.get(concept) or {}).get('units') or {}
+            for unit in ('USD', 'USD/shares', 'shares'):
+                if units.get(unit):
+                    return units[unit], concept, unit
+    return [], None, None
+
+
+def duration_series(companyfacts, concepts):
+    rows, concept, unit = fact_units(companyfacts, concepts)
+    picked = {}
+    for r in rows:
+        if r.get('form') not in ('10-Q', '10-K') or not r.get('start') or not r.get('end'):
+            continue
+        try:
+            days = (datetime.fromisoformat(r['end']) - datetime.fromisoformat(r['start'])).days
+        except ValueError:
+            continue
+        annual = r.get('form') == '10-K' and 300 <= days <= 390
+        quarter = r.get('form') in ('10-Q', '10-K') and 70 <= days <= 120
+        if not (annual or quarter):
+            continue
+        kind = 'annual' if annual else 'quarterly'
+        key = (kind, r['end'])
+        if key not in picked or (r.get('filed') or '') > (picked[key].get('filed') or ''):
+            picked[key] = r
+    out = {'annual': [], 'quarterly': [], 'concept': concept, 'unit': unit}
+    for (kind, _), r in sorted(picked.items(), key=lambda x: x[0][1]):
+        out[kind].append(clean({'start': r.get('start'), 'end': r.get('end'), 'filed': r.get('filed'), 'fy': r.get('fy'),
+                                'fp': r.get('fp'), 'value': r.get('val')}))
+    # Mnoho emitentů v XBRL neposílá samostatné Q4. Dopočítáme ho jako
+    # celý fiskální rok minus první tři samostatná čtvrtletí.
+    quarter_ends = {r.get('end') for r in out['quarterly']}
+    for annual_row in out['annual']:
+        start, end = annual_row.get('start'), annual_row.get('end')
+        if not start or not end or end in quarter_ends or not isinstance(annual_row.get('value'), (int, float)):
+            continue
+        within = [r for r in out['quarterly'] if start <= (r.get('end') or '') < end and isinstance(r.get('value'), (int, float))]
+        within = sorted(within, key=lambda r: r['end'])[-3:]
+        if len(within) == 3:
+            out['quarterly'].append({'start': within[-1]['end'], 'end': end, 'filed': annual_row.get('filed'),
+                                      'fy': annual_row.get('fy'), 'fp': 'Q4',
+                                      'value': annual_row['value'] - sum(r['value'] for r in within), 'derived': True})
+            quarter_ends.add(end)
+    out['quarterly'].sort(key=lambda r: r.get('end') or '')
+    out['annual'] = out['annual'][-6:]
+    out['quarterly'] = out['quarterly'][-8:]
+    return out
+
+
+def instant_latest(companyfacts, concepts):
+    rows, concept, unit = fact_units(companyfacts, concepts)
+    valid = [r for r in rows if r.get('form') in ('10-Q', '10-K', '10-K/A', '10-Q/A') and r.get('end')]
+    if not valid:
+        return None
+    r = max(valid, key=lambda x: (x.get('end') or '', x.get('filed') or ''))
+    return clean({'end': r.get('end'), 'filed': r.get('filed'), 'value': r.get('val'),
+                  'concept': concept, 'unit': unit})
+
+
+def last_value(series, kind='quarterly'):
+    rows = (series or {}).get(kind) or []
+    return rows[-1].get('value') if rows else None
+
+
+def trailing(series):
+    rows = (series or {}).get('quarterly') or []
+    vals = [r.get('value') for r in rows[-4:] if isinstance(r.get('value'), (int, float))]
+    return sum(vals) if len(vals) == 4 else None
+
+
+def safe_div(a, b):
+    return a / b if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b else None
+
+
+def filing_events(sub, cik):
+    rec = (sub.get('filings') or {}).get('recent') or {}
+    keys = ('accessionNumber', 'form', 'filingDate', 'reportDate', 'primaryDocument', 'items')
+    cols = {k: rec.get(k) or [] for k in keys}
+    size = len(cols['accessionNumber'])
+    events = []
+    for i in range(size):
+        if i >= len(cols['form']) or cols['form'][i] not in ('8-K', '8-K/A'):
+            continue
+        filed = cols['filingDate'][i] if i < len(cols['filingDate']) else None
+        if filed and filed < (TODAY - timedelta(days=550)).isoformat():
+            continue
+        acc = cols['accessionNumber'][i]
+        raw_items = cols['items'][i] if i < len(cols['items']) else ''
+        items = re.findall(r'\d\.\d{2}', raw_items or '')
+        labels = []
+        for item in items:
+            label = EVENT_LABELS.get(item)
+            if label and label not in labels:
+                labels.append(label)
+        primary = cols['primaryDocument'][i] if i < len(cols['primaryDocument']) else ''
+        url = f'{acc_folder(cik, acc)}/{primary}' if primary else index_url(cik, acc)
+        events.append(clean({'filed': filed, 'report': cols['reportDate'][i] if i < len(cols['reportDate']) else None,
+                             'form': cols['form'][i], 'items': items, 'labels': labels,
+                             'title': labels[0] if labels else 'Významná firemní událost', 'url': url}))
+        if len(events) >= 18:
+            break
+    return events
+
+
+def update_fundamentals(sym, tmap, price=None):
+    if sym not in tmap:
+        return False
+    cik, title = tmap[sym]
+    sub = get_json(f'https://data.sec.gov/submissions/CIK{int(cik):010d}.json')
+    facts = get_json(f'https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json')
+    if not sub or not facts:
+        return False
+    series = {name: duration_series(facts, concepts) for name, concepts in DURATION_FACTS.items()}
+    instant = {name: instant_latest(facts, concepts) for name, concepts in INSTANT_FACTS.items()}
+    revenue_ttm, income_ttm = trailing(series['revenue']), trailing(series['net_income'])
+    op_income_ttm, cfo_ttm, capex_ttm = trailing(series['operating_income']), trailing(series['operating_cash']), trailing(series['capex'])
+    eps_ttm = trailing(series['eps_diluted'])
+    shares = (instant.get('shares') or {}).get('value')
+    market_cap = price * shares if isinstance(price, (int, float)) and isinstance(shares, (int, float)) else None
+    fcf_ttm = cfo_ttm - capex_ttm if isinstance(cfo_ttm, (int, float)) and isinstance(capex_ttm, (int, float)) else None
+    debt = sum((instant.get(k) or {}).get('value') or 0 for k in ('debt_current', 'debt_long')) or None
+    cash = (instant.get('cash') or {}).get('value')
+    equity = (instant.get('equity') or {}).get('value')
+    qrev = series['revenue']['quarterly']
+    rev_growth = safe_div(qrev[-1]['value'], qrev[-5]['value']) - 1 if len(qrev) >= 5 and qrev[-5].get('value') else None
+    valuation = clean({
+        'price': price, 'market_cap': market_cap, 'pe_ttm': safe_div(price, eps_ttm),
+        'ps_ttm': safe_div(market_cap, revenue_ttm), 'fcf_yield': safe_div(fcf_ttm, market_cap),
+        'net_margin': safe_div(income_ttm, revenue_ttm), 'operating_margin': safe_div(op_income_ttm, revenue_ttm),
+        'roe': safe_div(income_ttm, equity), 'revenue_growth_yoy': rev_growth,
+        'net_debt': debt - cash if isinstance(debt, (int, float)) and isinstance(cash, (int, float)) else None,
+    })
+    save(f'fundamentals/{sym}.json', {
+        'ticker': sym, 'name': sub.get('name') or title, 'cik': cik, 'updated': NOW.isoformat(),
+        'series': series, 'instant': instant, 'ttm': clean({'revenue': revenue_ttm, 'net_income': income_ttm,
+            'operating_income': op_income_ttm, 'operating_cash': cfo_ttm, 'capex': capex_ttm,
+            'free_cash_flow': fcf_ttm, 'eps_diluted': eps_ttm}),
+        'valuation': valuation, 'events': filing_events(sub, cik),
+        'source': 'SEC EDGAR XBRL',
+    })
+    log('fundamenty', sym, 'událostí 8-K:', len(filing_events(sub, cik)))
+    return True
+
+
 # ---------------------------------------------------------------- guru (13F)
 STOP = set('INC INCORPORATED CORP CORPORATION CO COMPANY LTD LIMITED PLC HLDGS HOLDINGS HOLDING GROUP GRP '
            'CL CLASS A B C COM NEW DEL THE SA NV AG LP LLC SHS ORD ADR SPONSORED SPON DE TR TRUST'.split())
@@ -1166,6 +1351,22 @@ def main():
     for t, (cik, _) in tmap.items():
         rev.setdefault(str(int(cik)), t)
     log('tickerů v SEC:', len(tmap))
+
+    # Výkazy a 8-K stačí obnovit jednou denně. Tržní cena se do ocenění
+    # propíše při tomto denním snapshotu; návštěvník žádný klíč nepotřebuje.
+    if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat():
+        market_prices = {r.get('ticker'): r.get('price') for r in load('market.json', {}).get('symbols', [])}
+        fundamental_ok = 0
+        for sym in tickers:
+            if not time_left():
+                break
+            try:
+                fundamental_ok += bool(update_fundamentals(sym, tmap, market_prices.get(sym)))
+            except Exception as e:
+                log('CHYBA fundamenty', sym, repr(e))
+        if fundamental_ok:
+            meta['fundamentals_at'] = NOW.isoformat()
+            meta['fundamentals_count'] = fundamental_ok
 
     try:
         update_feed(meta)
