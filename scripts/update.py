@@ -38,7 +38,7 @@ def time_left():
 # ---------------------------------------------------------------- HTTP
 _last_sec = [0.0]
 DEBUG = {'errors': [], 'probe': []}
-UA_CANDIDATES = [UA, 'Pavel admin@masaze-tisnov.cz', 'MarketTrace admin@masaze-tisnov.cz']
+UA_CANDIDATES = [UA, 'MarketTrace markettrace@users.noreply.github.com']
 
 
 def note_error(url, code, body=b''):
@@ -816,13 +816,32 @@ def update_alpaca(meta, symbols):
             log('Alpaca: denní svíčky pro', len(daily), 'titulů')
     ext = load('ext.json', {}).get('sym', {})
     ny = now.astimezone(NY)
-    start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
+    session_start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
+    # Při prvním běhu připravíme několik obchodních dnů historie. Další běhy
+    # stahují jen dnešek a slučují ho s uloženými minutovými svíčkami.
+    has_intraday = bool(meta.get('intraday_at'))
+    start = session_start if has_intraday else now - timedelta(days=8)
     if ny.weekday() < 5 and end > start.astimezone(timezone.utc):
         mins = alpaca_bars(symbols, '1Min', iso(start), iso(end))
         for sym, bars in (mins or {}).items():
             if not bars:
                 continue
-            tagged = [(b, session_of(b['t'])) for b in bars]
+            existing = load(f'intraday/{sym}.json', [])
+            merged = {str(row[0]): row for row in existing
+                      if isinstance(row, list) and len(row) >= 6}
+            for b in bars:
+                merged[b['t']] = [b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
+            cutoff = now - timedelta(days=10)
+            packed = [row for row in merged.values()
+                      if datetime.fromisoformat(str(row[0]).replace('Z', '+00:00')) >= cutoff]
+            packed.sort(key=lambda row: row[0])
+            save(f'intraday/{sym}.json', packed[-5000:])
+
+            today_bars = [b for b in bars
+                          if datetime.fromisoformat(b['t'].replace('Z', '+00:00')).astimezone(NY).date() == today_ny]
+            tagged = [(b, session_of(b['t'])) for b in today_bars]
+            if not tagged:
+                continue
             last, sess = tagged[-1]
             same = [b for b, ss in tagged if ss == sess]
             daily = load(f'bars/{sym}.json', [])
@@ -836,7 +855,8 @@ def update_alpaca(meta, symbols):
                 'v': sum(b['v'] for b in same),
             })
         if mins:
-            log('Alpaca: ceny mimo hlavní seanci pro', len(mins), 'titulů')
+            meta['intraday_at'] = iso(now)
+            log('Alpaca: minutové grafy a ceny pro', len(mins), 'titulů')
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 

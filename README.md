@@ -7,7 +7,7 @@ Veřejná česká aplikace pro sledování amerických akcií, insider obchodů 
 Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravuje datový snapshot na serveru a GitHub Pages ho pouze zobrazí.
 
 - ceny, objemy a denní svíčky: Alpaca, přibližně 15 minut zpoždění;
-- interaktivní minutové a svíčkové grafy: veřejný widget TradingView bez uživatelského API klíče;
+- interaktivní minutové a svíčkové grafy: vlastní graf KLineChart nad serverovým snapshotem Alpaca, bez uživatelského API klíče a bez reklamních oken;
 - obchody insiderů: SEC EDGAR Form 4;
 - plánované prodeje: SEC Form 144;
 - aktivistické podíly: SEC Schedule 13D;
@@ -19,6 +19,7 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 - vysvětlitelné MarketTrace skóre rozdělené na trend, momentum, objem, Smart Money a stabilitu;
 - pokročilý screener podle relativního objemu, insider nákupů, 52týdenního pásma a skóre;
 - časová osa cenových a SEC událostí v detailu akcie;
+- volitelné indikátory Volume, MA, EMA, Bollinger Bands, MACD, RSI, KDJ a OBV;
 - cluster nákupy více insiderů z jedné společnosti;
 - porovnání dvou až čtyř akcií;
 - Smart Money přehled nových, navýšených, snížených a ukončených 13F pozic.
