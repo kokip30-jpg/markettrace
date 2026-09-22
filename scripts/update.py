@@ -1156,8 +1156,10 @@ def update_alpaca(meta, symbols):
     now = datetime.now(timezone.utc)
     end = now - timedelta(minutes=16)  # zdarma jen se zpožděním 15 minut
     today_ny = now.astimezone(NY).date()
-    if meta.get('bars_at', '')[:10] != today_ny.isoformat():
-        daily = alpaca_bars(symbols, '1Day', iso(now - timedelta(days=400)), iso(end))
+    missing_daily = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json'))]
+    daily_targets = symbols if meta.get('bars_at', '')[:10] != today_ny.isoformat() else missing_daily
+    if daily_targets:
+        daily = alpaca_bars(daily_targets, '1Day', iso(now - timedelta(days=400)), iso(end))
         if daily is None:
             log('Alpaca: denní svíčky se nepodařilo stáhnout')
         else:
@@ -1168,12 +1170,18 @@ def update_alpaca(meta, symbols):
     ext = load('ext.json', {}).get('sym', {})
     ny = now.astimezone(NY)
     session_start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
-    # Při prvním běhu připravíme několik obchodních dnů historie. Další běhy
-    # stahují jen dnešek a slučují ho s uloženými minutovými svíčkami.
-    has_intraday = bool(meta.get('intraday_at'))
-    start = session_start if has_intraday else now - timedelta(days=8)
-    if ny.weekday() < 5 and end > start.astimezone(timezone.utc):
-        mins = alpaca_bars(symbols, '1Min', iso(start), iso(end))
+    # Nově přidaným titulům připravíme několik obchodních dnů historie,
+    # zatímco existující tituly stahují jen dnešní přírůstek.
+    missing_intraday = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'intraday', f'{sym}.json'))]
+    current_symbols = [sym for sym in symbols if sym not in missing_intraday]
+    mins = {}
+    if ny.weekday() < 5 and end > session_start.astimezone(timezone.utc) and current_symbols:
+        mins.update(alpaca_bars(current_symbols, '1Min', iso(session_start), iso(end)) or {})
+    if missing_intraday:
+        backfill = alpaca_bars(missing_intraday, '1Min', iso(now - timedelta(days=8)), iso(end)) or {}
+        for sym, rows in backfill.items():
+            mins.setdefault(sym, []).extend(rows)
+    if mins:
         for sym, bars in (mins or {}).items():
             if not bars:
                 continue
@@ -1205,9 +1213,8 @@ def update_alpaca(meta, symbols):
                 'h': max(b['h'] for b in same), 'l': min(b['l'] for b in same),
                 'v': sum(b['v'] for b in same),
             })
-        if mins:
-            meta['intraday_at'] = iso(now)
-            log('Alpaca: minutové grafy a ceny pro', len(mins), 'titulů')
+        meta['intraday_at'] = iso(now)
+        log('Alpaca: minutové grafy a ceny pro', len(mins), 'titulů')
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
@@ -1518,10 +1525,14 @@ def main():
 
     # Výkazy a 8-K stačí obnovit jednou denně. Tržní cena se do ocenění
     # propíše při tomto denním snapshotu; návštěvník žádný klíč nepotřebuje.
-    if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat() or meta.get('fundamentals_schema') != 2:
+    missing_fundamentals = [sym for sym in tickers
+                            if not os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json'))]
+    if (meta.get('fundamentals_at', '')[:10] != TODAY.isoformat()
+            or meta.get('fundamentals_schema') != 2 or missing_fundamentals):
         market_prices = {r.get('ticker'): r.get('price') for r in load('market.json', {}).get('symbols', [])}
         fundamental_ok = 0
-        for sym in tickers:
+        targets = tickers if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat() else (missing_fundamentals or tickers)
+        for sym in targets:
             if not time_left():
                 break
             try:

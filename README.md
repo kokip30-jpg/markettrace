@@ -46,3 +46,5 @@ Automat běží v pracovní dny každých 5 minut a o víkendu každé 2 hodiny.
 - volitelně `NTFY_TOPIC` pro administrátorská upozornění
 
 Portfolio a watchlist se ukládají pouze do prohlížeče návštěvníka. Portfolio lze exportovat a znovu importovat jako JSON.
+
+Sledovaný seznam zahrnuje 60+ likvidních titulů: velké technologie, čipy, AI, krypto těžaře a treasury společnosti, růstové akcie, letectví a novou energetiku. Další ticker stačí přidat do `config.json`.
