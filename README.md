@@ -45,6 +45,7 @@ Ceny a grafy se v pracovní dny obnovují každých 5 minut. SEC, 13F a fundamen
 
 - `ALPACA_KEY`
 - `ALPACA_SECRET`
+- volitelně `SEC_USER_AGENT` ve formátu `MarketTrace kontakt@example.cz`; neveřejný kontakt pomáhá při případném blokování SEC;
 - volitelně `NTFY_TOPIC` pro administrátorská upozornění
 
 Portfolio a watchlist se ukládají pouze do prohlížeče návštěvníka. Portfolio lze exportovat a znovu importovat jako JSON.

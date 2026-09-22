@@ -20,7 +20,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.join(ROOT, 'data')
 with open(os.path.join(ROOT, 'config.json'), encoding='utf-8') as fh:
     CFG = json.load(fh)
-UA = CFG.get('user_agent') or 'MarketTrace markettrace@users.noreply.github.com'
+UA = os.environ.get('SEC_USER_AGENT', '').strip() or CFG.get('user_agent') or 'MarketTrace kokip30-jpg@users.noreply.github.com'
 NOW = datetime.now(timezone.utc)
 TODAY = NOW.date()
 START = time.time()
@@ -39,7 +39,7 @@ def time_left():
 # ---------------------------------------------------------------- HTTP
 _last_sec = [0.0]
 DEBUG = {'errors': [], 'probe': []}
-UA_CANDIDATES = [UA, 'MarketTrace markettrace@users.noreply.github.com']
+UA_CANDIDATES = list(dict.fromkeys([UA, 'MarketTrace kokip30-jpg@users.noreply.github.com']))
 
 
 def note_error(url, code, body=b''):
@@ -67,7 +67,7 @@ def probe_sec():
                 UA = ua
                 return True
         except urllib.error.HTTPError as e:
-            note_error('probe ' + ua, e.code, e.read())
+            note_error('SEC probe', e.code, e.read())
             DEBUG['probe'].append({'code': e.code})
         except Exception as e:
             DEBUG['probe'].append({'error': type(e).__name__})
@@ -1828,9 +1828,9 @@ def main():
         if fundamental_ok:
             meta['fundamentals_at'] = NOW.isoformat()
             meta['fundamentals_refreshed'] = fundamental_ok
-            meta['fundamentals_count'] = sum(
-                os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json')) for sym in tickers)
             meta['fundamentals_schema'] = 2
+    meta['fundamentals_count'] = sum(
+        os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json')) for sym in tickers)
 
     try:
         update_targets(tickers)
