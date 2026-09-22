@@ -23,7 +23,8 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 - ocenění P/E, P/S, FCF výnos, ROE, marže a orientační finanční zdraví;
 - automaticky popsané významné události z formulářů 8-K;
 - rizikový panel s volatilitou, maximálním propadem, ATR a betou vůči SPY;
-- volitelné indikátory Volume, MA 100/200, krátkodobé MA, EMA, Bollinger Bands, MACD, RSI, KDJ a OBV;
+- delší hodinová a denní cenová historie pro spolehlivější MA 100/200;
+- volitelné indikátory Volume, MA 100/200 s objemem, krátkodobé MA, EMA, Bollinger Bands, MACD, RSI, KDJ a OBV;
 - cluster nákupy více insiderů z jedné společnosti;
 - porovnání dvou až čtyř akcií;
 - Smart Money přehled nových, navýšených, snížených a ukončených 13F pozic.

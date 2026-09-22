@@ -1157,16 +1157,34 @@ def update_alpaca(meta, symbols):
     end = now - timedelta(minutes=16)  # zdarma jen se zpožděním 15 minut
     today_ny = now.astimezone(NY).date()
     missing_daily = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json'))]
-    daily_targets = symbols if meta.get('bars_at', '')[:10] != today_ny.isoformat() else missing_daily
+    refresh_daily = (meta.get('bars_at', '')[:10] != today_ny.isoformat()
+                     or meta.get('bars_history_schema') != 2)
+    daily_targets = symbols if refresh_daily else missing_daily
     if daily_targets:
-        daily = alpaca_bars(daily_targets, '1Day', iso(now - timedelta(days=400)), iso(end))
+        daily = alpaca_bars(daily_targets, '1Day', iso(now - timedelta(days=1100)), iso(end))
         if daily is None:
             log('Alpaca: denní svíčky se nepodařilo stáhnout')
         else:
             for sym, bars in daily.items():
                 save(f'bars/{sym}.json', [[b['t'][:10], b['o'], b['h'], b['l'], b['c'], b['v']] for b in bars])
             meta['bars_at'] = today_ny.isoformat()
+            meta['bars_history_schema'] = 2
             log('Alpaca: denní svíčky pro', len(daily), 'titulů')
+    missing_hourly = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'hourly', f'{sym}.json'))]
+    refresh_hourly = (meta.get('hourly_at', '')[:10] != today_ny.isoformat()
+                      or meta.get('hourly_schema') != 1)
+    hourly_targets = symbols if refresh_hourly else missing_hourly
+    if hourly_targets:
+        hourly = alpaca_bars(hourly_targets, '1Hour', iso(now - timedelta(days=120)), iso(end))
+        if hourly is None:
+            log('Alpaca: hodinové svíčky se nepodařilo stáhnout')
+        else:
+            for sym, bars in hourly.items():
+                save(f'hourly/{sym}.json', [[b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
+                                             for b in bars][-1600:])
+            meta['hourly_at'] = today_ny.isoformat()
+            meta['hourly_schema'] = 1
+            log('Alpaca: hodinové svíčky pro', len(hourly), 'titulů')
     ext = load('ext.json', {}).get('sym', {})
     ny = now.astimezone(NY)
     session_start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
@@ -1246,13 +1264,28 @@ def update_crypto(meta, pairs):
     today = now.date().isoformat()
     sym = {p: p.replace('/', '-') for p in pairs}
     missing = [p for p in pairs if not os.path.exists(os.path.join(DATA, 'bars', f'{sym[p]}.json'))]
-    if meta.get('crypto_bars_at', '')[:10] != today or missing:
-        daily = crypto_bars(pairs, '1Day', iso(now - timedelta(days=400)))
+    refresh_daily = (meta.get('crypto_bars_at', '')[:10] != today
+                     or meta.get('crypto_bars_history_schema') != 2)
+    if refresh_daily or missing:
+        daily = crypto_bars(pairs, '1Day', iso(now - timedelta(days=1100)))
         for p, bars in (daily or {}).items():
             if p in sym:
                 save(f'bars/{sym[p]}.json', [[b['t'][:10], b['o'], b['h'], b['l'], b['c'], b['v']] for b in bars])
         if daily:
             meta['crypto_bars_at'] = today
+            meta['crypto_bars_history_schema'] = 2
+    missing_hourly = [p for p in pairs if not os.path.exists(os.path.join(DATA, 'hourly', f'{sym[p]}.json'))]
+    refresh_hourly = (meta.get('crypto_hourly_at', '')[:10] != today
+                      or meta.get('crypto_hourly_schema') != 1)
+    if refresh_hourly or missing_hourly:
+        hourly = crypto_bars(pairs, '1Hour', iso(now - timedelta(days=120)))
+        for p, bars in (hourly or {}).items():
+            if p in sym:
+                save(f'hourly/{sym[p]}.json', [[b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
+                                                for b in bars][-3000:])
+        if hourly:
+            meta['crypto_hourly_at'] = today
+            meta['crypto_hourly_schema'] = 1
     lasts = []
     for p in pairs:
         rows = load(f'intraday/{sym[p]}.json', [])
