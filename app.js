@@ -146,6 +146,7 @@
   }
   $$('[data-fund-period]').forEach(b=>b.addEventListener('click',()=>{state.fundamentalPeriod=b.dataset.fundPeriod;$$('[data-fund-period]').forEach(x=>x.classList.toggle('active',x===b));renderFundamentalPeriod();}));
   function renderValuation(fund,s){
+    if(!fund){$('#valuationPanel').innerHTML='<div class="panel-head"><div><p class="eyebrow">OCENĚNÍ A KVALITA</p><h2>Čekám na SEC data</h2></div></div><div class="empty-state">Server zatím tento finanční snapshot nevytvořil.</div>';return;}
     const v=fund?.valuation||{},t=fund?.ttm||{},shares=fund?.instant?.shares?.value,cap=ok(s?.price)&&ok(shares)?Number(s.price)*Number(shares):v.market_cap,pe=ok(t.eps_diluted)&&Number(t.eps_diluted)>0?Number(s.price)/Number(t.eps_diluted):null,ps=ok(cap)&&ok(t.revenue)?cap/t.revenue:null,fcfy=ok(t.free_cash_flow)&&ok(cap)?t.free_cash_flow/cap:null,netDebt=v.net_debt;
     let health=0,reasons=[];if(Number(v.revenue_growth_yoy)>0){health+=20;reasons.push('rostoucí tržby');}if(Number(t.free_cash_flow)>0){health+=25;reasons.push('kladné FCF');}if(Number(v.operating_margin)>.15){health+=20;reasons.push('silná provozní marže');}else if(Number(v.operating_margin)>0)health+=10;if(Number(v.roe)>.15)health+=20;else if(Number(v.roe)>0)health+=10;if(ok(netDebt)&&Number(netDebt)<=0){health+=15;reasons.push('čistá hotovost');}else if(ok(netDebt)&&ok(t.free_cash_flow)&&t.free_cash_flow>0&&netDebt/t.free_cash_flow<3)health+=10;health=Math.min(100,health);
     const tone=health>=70?'high':health>=45?'mid':'';

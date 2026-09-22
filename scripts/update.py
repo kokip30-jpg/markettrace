@@ -57,7 +57,9 @@ def probe_sec():
     global UA
     for ua in UA_CANDIDATES:
         try:
-            req = urllib.request.Request('https://www.sec.gov/files/company_tickers.json',
+            # data.sec.gov bývá z GitHub runnerů dostupné i v době, kdy
+            # www.sec.gov blokuje obecnou kontrolní adresu.
+            req = urllib.request.Request('https://data.sec.gov/submissions/CIK0000320193.json',
                                          headers={'User-Agent': ua, 'Accept-Encoding': 'gzip, deflate'})
             with urllib.request.urlopen(req, timeout=30) as r:
                 DEBUG['probe'].append({'ua': ua, 'code': r.status})
