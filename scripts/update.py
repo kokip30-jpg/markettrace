@@ -1218,6 +1218,76 @@ def update_alpaca(meta, symbols):
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
+# ---------------------------------------------------------------- kryptoměny (Alpaca, bez zpoždění)
+def crypto_bars(pairs, timeframe, start):
+    res, token = {}, None
+    for _ in range(60):
+        q = {'symbols': ','.join(pairs), 'timeframe': timeframe, 'start': start, 'limit': 10000}
+        if token:
+            q['page_token'] = token
+        b = http('https://data.alpaca.markets/v1beta3/crypto/us/bars?' + urllib.parse.urlencode(q),
+                 headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS, 'Accept': 'application/json'})
+        if not b:
+            return res or None
+        j = json.loads(b)
+        for sym, bars in (j.get('bars') or {}).items():
+            res.setdefault(sym, []).extend(bars)
+        token = j.get('next_page_token')
+        if not token:
+            break
+    return res
+
+
+def update_crypto(meta, pairs):
+    """Kryptoměny ukládá ve stejném tvaru jako akcie (bars/, intraday/, ext.json) pod tickerem BTC-USD."""
+    if not (AK and AS) or not pairs:
+        return []
+    now = datetime.now(timezone.utc)
+    today = now.date().isoformat()
+    sym = {p: p.replace('/', '-') for p in pairs}
+    missing = [p for p in pairs if not os.path.exists(os.path.join(DATA, 'bars', f'{sym[p]}.json'))]
+    if meta.get('crypto_bars_at', '')[:10] != today or missing:
+        daily = crypto_bars(pairs, '1Day', iso(now - timedelta(days=400)))
+        for p, bars in (daily or {}).items():
+            if p in sym:
+                save(f'bars/{sym[p]}.json', [[b['t'][:10], b['o'], b['h'], b['l'], b['c'], b['v']] for b in bars])
+        if daily:
+            meta['crypto_bars_at'] = today
+    lasts = []
+    for p in pairs:
+        rows = load(f'intraday/{sym[p]}.json', [])
+        lasts.append(rows[-1][0] if rows else None)
+    start = min([x for x in lasts if x] or [iso(now - timedelta(days=3))]) if all(lasts) else iso(now - timedelta(days=3))
+    mins = crypto_bars(pairs, '1Min', start) or {}
+    ext_doc = load('ext.json', {})
+    ext = ext_doc.get('sym', {})
+    done = []
+    for p in pairs:
+        s_ = sym[p]
+        merged = {str(r[0]): r for r in load(f'intraday/{s_}.json', []) if isinstance(r, list) and len(r) >= 6}
+        for b in mins.get(p, []):
+            merged[b['t']] = [b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
+        cutoff = now - timedelta(days=4)
+        packed = sorted((r for r in merged.values()
+                         if datetime.fromisoformat(str(r[0]).replace('Z', '+00:00')) >= cutoff), key=lambda r: r[0])[-5000:]
+        if not packed:
+            continue
+        save(f'intraday/{s_}.json', packed)
+        todays = [r for r in packed if r[0][:10] == today] or packed[-1:]
+        daily = load(f'bars/{s_}.json', [])
+        prev = [b for b in daily if b[0] < today]
+        ext[s_] = clean({'p': packed[-1][4], 't': packed[-1][0], 's': 'regular',
+                         'pc': prev[-1][4] if prev else None,
+                         'h': max(r[2] for r in todays), 'l': min(r[3] for r in todays),
+                         'v': sum(r[5] or 0 for r in todays)})
+        done.append(s_)
+    ext_doc['sym'] = ext
+    save('ext.json', ext_doc)
+    if done:
+        log('kryptoměny:', ', '.join(done))
+    return done
+
+
 def build_market_snapshot(symbols):
     """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
     ext_doc = load('ext.json', {})
@@ -1251,7 +1321,7 @@ def build_market_snapshot(symbols):
         completed = bars[-21:-1] if len(bars) > 1 else bars[-20:]
         avg_volume = sum(b[5] or 0 for b in completed) / len(completed) if completed else None
         name_data = names.get(sym) or []
-        name = name_data[1] if len(name_data) > 1 else sym
+        name = CFG.get('names', {}).get(sym) or (name_data[1] if len(name_data) > 1 else sym)
         out.append(clean({
             'ticker': sym, 'name': name, 'price': price, 'previous_close': prev_close,
             'change': ((price - prev_close) / prev_close * 100) if prev_close else None,
@@ -1535,7 +1605,10 @@ def main():
     tickers = [t.upper() for t in CFG.get('tickers', [])]
     market_symbols = list(dict.fromkeys(tickers + [t.upper() for t in CFG.get('market_symbols', [])]))
 
-    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_market_snapshot(market_symbols), lambda: update_fx(meta)):
+    crypto_pairs = [p.upper() for p in CFG.get('crypto', [])]
+    crypto_syms = [p.replace('/', '-') for p in crypto_pairs]
+    for step in (lambda: update_alpaca(meta, market_symbols), lambda: update_crypto(meta, crypto_pairs),
+                 lambda: build_market_snapshot(market_symbols + crypto_syms), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:

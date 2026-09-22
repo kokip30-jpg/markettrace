@@ -126,12 +126,12 @@
   }
 
   /* ---------- panel: férová hodnota ---------- */
-  function fairHtml(sym, price, ev){
+  function fairHtml(sym, price, ev, hasFund){
     const label = {under: 'Podhodnocená', fair: 'Férově oceněná', over: 'Nadhodnocená'};
     if(!ev.fair){
       return `<div class="panel-head"><div><p class="eyebrow">FÉROVÁ HODNOTA</p><h2>Je ${esc(sym)} levná, nebo drahá?</h2></div></div><div class="fv-body">
         <div class="fv-verdict"><span class="fv-badge na">Nelze určit</span></div>
-        <p class="fv-note">Firma nemá kladný zisk ani cash flow a analytici k ní nevydávají cílovou cenu, takže férovou hodnotu nejde rozumně spočítat.</p></div>`;
+        <p class="fv-note">${hasFund ? 'Firma nemá kladný zisk ani cash flow a analytici k ní nevydávají cílovou cenu, takže férovou hodnotu nejde rozumně spočítat.' : 'U ETF, komodit a kryptoměn nejsou firemní výkazy ani cílové ceny analytiků, takže férovou hodnotu tímto způsobem spočítat nejde. Cenu určuje hlavně nabídka a poptávka.'}</p></div>`;
     }
     const lo = Math.min(ev.lo, price) * 0.85, hi = Math.max(ev.hi, price) * 1.1;
     const pos = v => clamp((v - lo) / (hi - lo) * 100, 2, 98);
@@ -236,7 +236,7 @@
       return;
     }
     const t = tgt && !tgt.none ? tgt : null;
-    $('#fvFair').innerHTML = fairHtml(sym, price, evaluate(price, fund, t));
+    $('#fvFair').innerHTML = fairHtml(sym, price, evaluate(price, fund, t), !!fund);
     last = [sym, price, bars, t];
     $('#fvTarget').innerHTML = targetHtml(...last);
   }
