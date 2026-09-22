@@ -76,7 +76,7 @@
     const unusual=[...rows].sort((a,b)=>(b.rel_volume||0)-(a.rel_volume||0))[0];
     const mover=[...rows].sort((a,b)=>Math.abs(b.change||0)-Math.abs(a.change||0))[0];
     const wset=new Set(state.watch),wrows=rows.filter(s=>wset.has(s.ticker)),buys=(wset.size?wrows:rows).reduce((n,s)=>n+(s.insider_buys||0),0),buysLabel=wset.size?'u sledovaných titulů':`u všech ${rows.length} titulů v přehledu`;
-    $('#marketMetrics').innerHTML=`<article class="metric-card"><span>Nejvyšší objem</span><strong>${esc(active.ticker)}</strong><small>${compact(active.volume)} akcií</small></article><article class="metric-card"><span>Neobvyklý objem</span><strong>${esc(unusual.ticker)}</strong><small>${rel(unusual.rel_volume)} běžného objemu</small></article><article class="metric-card"><span>Největší pohyb</span><strong>${esc(mover.ticker)}</strong><small class="${cls(mover.change)}">${pct(mover.change)}</small></article><article class="metric-card"><span>Insider nákupy</span><strong>${buys}</strong><small>${buysLabel}</small></article>`;
+    $('#marketMetrics').innerHTML=`<article class="metric-card"><span>Nejvyšší objem</span><strong>${esc(active.ticker)}</strong><small>${compact(active.volume)} akcií</small></article><article class="metric-card"><span>Neobvyklý objem</span><strong>${esc(unusual.ticker)}</strong><small>${rel(unusual.rel_volume)} běžného objemu</small></article><article class="metric-card"><span>Největší pohyb</span><strong>${esc(mover.ticker)}</strong><small class="${cls(mover.change)}">${pct(mover.change)}</small></article><article class="metric-card metric-link" role="button" tabindex="0" data-open-buys aria-label="Zobrazit insider nákupy"><span>Insider nákupy <em class="metric-go">Zobrazit →</em></span><strong>${buys}</strong><small>${buysLabel}</small></article>`;
   }
   function filteredStocks(){
     const q=$('#stockSearch').value.trim().toLowerCase(), f=$('#stockFilter').value, sort=$('#stockSort').value;
@@ -247,5 +247,22 @@
     }catch(e){$('#feedStatus').className='feed-status error';$('#feedStatus b').textContent='Data nejsou dostupná';$('#stockRows').innerHTML='<tr><td colspan="8"><div class="empty-state">Tržní snapshot se právě připravuje. Zkus stránku obnovit za několik minut.</div></td></tr>';console.error(e);}
     const h=decodeURIComponent(location.hash.slice(1)),route=h.toLowerCase();if(!route||route==='prehled'||route==='overview')setView('overview');else if(['insiders','gurus','compare','portfolio'].includes(route))setView(route);else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h.toUpperCase()))openDetail(h.toUpperCase());
   }
+
+  async function openBuysSheet(){
+    let sheet=$('#buysSheet');
+    if(!sheet){sheet=document.createElement('div');sheet.id='buysSheet';sheet.className='sheet';sheet.setAttribute('role','dialog');sheet.setAttribute('aria-modal','true');document.body.appendChild(sheet);
+      sheet.addEventListener('click',e=>{if(e.target===sheet||e.target.closest('[data-close]')){closeBuysSheet();return;}const c=e.target.closest('[data-sheet-ticker]');if(c&&!e.target.closest('a')){closeBuysSheet();openDetail(c.dataset.sheetTicker);}});
+      document.addEventListener('keydown',e=>{if(e.key==='Escape'&&sheet.classList.contains('open'))closeBuysSheet();});}
+    const watched=state.watch.length>0,set=new Set(watched?state.watch:state.market.map(s=>s.ticker));
+    sheet.innerHTML=`<div class="sheet-panel"><div class="panel-head"><div><p class="eyebrow">SEC FORM 4 · POSLEDNÍCH 45 DNÍ</p><h2>Insider nákupy ${watched?'u sledovaných':'u titulů v přehledu'}</h2></div><button class="secondary-btn" data-close type="button">Zavřít</button></div><div class="sheet-body"><div class="skeleton h40"></div></div></div>`;
+    sheet.classList.add('open');document.body.classList.add('sheet-lock');
+    try{const rows=(await data('feed-buys.json'))||[];const list=rows.filter(r=>set.has(r.t)).sort((a,b)=>String(b.f||'').localeCompare(String(a.f||''))||((b.s||0)*(b.p||0))-((a.s||0)*(a.p||0)));
+      $('.sheet-body',sheet).innerHTML=list.length?`<p class="sheet-note">${list.length} ${list.length===1?'nákup':list.length<5?'nákupy':'nákupů'} · klepnutím otevřete detail akcie</p><div class="cards-grid">${list.map(r=>`<div class="sheet-card" data-sheet-ticker="${esc(r.t)}">${tradeCard(r)}</div>`).join('')}</div>`:'<div class="empty-state">Za posledních 45 dní tu insideři nic nenakoupili.</div>';}
+    catch{$('.sheet-body',sheet).innerHTML='<div class="empty-state">Nákupy se nepodařilo načíst. Zkus to za chvíli.</div>';}
+  }
+  function closeBuysSheet(){const sh=$('#buysSheet');if(sh)sh.classList.remove('open');document.body.classList.remove('sheet-lock');}
+  $('#marketMetrics').addEventListener('click',e=>{if(e.target.closest('[data-open-buys]'))openBuysSheet();});
+  $('#marketMetrics').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest('[data-open-buys]')){e.preventDefault();openBuysSheet();}});
+  window.MT_openBuys=openBuysSheet;
   boot();
 })();

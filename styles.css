@@ -25,3 +25,16 @@
 @media(max-width:1050px){.cluster-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.fundamental-layout{grid-template-columns:1fr}.insight-column{grid-template-columns:1fr 1fr}}
 @media(max-width:760px){.analysis-grid{grid-template-columns:1fr}.cluster-grid{grid-template-columns:1fr 1fr}.compare-controls{align-items:stretch;flex-direction:column}.compare-add input{width:100%}.score-button small{display:none}.indicator-select{width:100%;justify-content:space-between}.indicator-select select{flex:1;max-width:none}.fundamental-summary{grid-template-columns:1fr 1fr}.fundamental-summary>div:nth-child(2){border-right:0}.fundamental-summary>div:nth-child(-n+2){border-bottom:1px solid var(--line)}.insight-column{grid-template-columns:1fr}.fundamental-panel .panel-head{gap:10px}.fundamental-actions{width:100%;flex-wrap:wrap}}
 @media(max-width:440px){.cluster-grid{grid-template-columns:1fr}.analysis-grid{gap:10px}.smart-table-head,.smart-row{grid-template-columns:70px minmax(150px,1fr) 100px 70px 90px}}
+
+.metric-link{cursor:pointer;transition:border-color .15s,transform .15s}.metric-link:hover{border-color:var(--blue)}.metric-link:active{transform:scale(.99)}
+.metric-go{font-style:normal;float:right;color:var(--blue);font-weight:700;font-size:12px}
+.sheet{position:fixed;inset:0;z-index:60;background:rgba(3,8,18,.62);display:flex;align-items:flex-end;justify-content:center;opacity:0;pointer-events:none;transition:opacity .2s}
+.sheet.open{opacity:1;pointer-events:auto}
+.sheet-panel{width:min(980px,100%);max-height:88vh;display:flex;flex-direction:column;background:var(--panel);border:1px solid var(--line);border-radius:18px 18px 0 0;box-shadow:var(--shadow);transform:translateY(24px);transition:transform .2s;padding-bottom:env(safe-area-inset-bottom)}
+.sheet.open .sheet-panel{transform:none}
+.sheet-body{overflow:auto;padding:14px 18px 20px}
+.sheet-note{color:var(--muted);font-size:13px;margin:0 0 12px}
+.sheet-card{cursor:pointer}.sheet-card .data-card{height:100%}.sheet-card:hover .data-card{border-color:var(--blue)}
+body.sheet-lock{overflow:hidden}
+@media(min-width:761px){.sheet{align-items:center}.sheet-panel{border-radius:18px;max-height:82vh}}
+@media(prefers-reduced-motion:reduce){.sheet,.sheet-panel{transition:none}}
