@@ -1121,22 +1121,27 @@ AK, AS = os.environ.get('ALPACA_KEY', '').strip(), os.environ.get('ALPACA_SECRET
 
 
 def alpaca_bars(symbols, timeframe, start, end):
-    res, token = {}, None
-    for _ in range(40):
-        q = {'symbols': ','.join(symbols), 'timeframe': timeframe, 'start': start, 'end': end,
-             'feed': 'sip', 'adjustment': 'split', 'limit': 10000}
-        if token:
-            q['page_token'] = token
-        b = http('https://data.alpaca.markets/v2/stocks/bars?' + urllib.parse.urlencode(q),
-                 headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS, 'Accept': 'application/json'})
-        if not b:
-            return None
-        j = json.loads(b)
-        for sym, bars in (j.get('bars') or {}).items():
-            res.setdefault(sym, []).extend(bars)
-        token = j.get('next_page_token')
-        if not token:
-            break
+    # Alpaca řadí vícesymbolové výsledky podle tickeru. Jeden velký dotaz může
+    # vyčerpat stránkovací limit dřív, než se dostane k tickerům na konci abecedy.
+    # Menší dávky zaručí kompletní historii pro celý screener.
+    res = {}
+    for offset in range(0, len(symbols), 20):
+        batch, token = symbols[offset:offset + 20], None
+        for _ in range(60):
+            q = {'symbols': ','.join(batch), 'timeframe': timeframe, 'start': start, 'end': end,
+                 'feed': 'sip', 'adjustment': 'split', 'limit': 10000}
+            if token:
+                q['page_token'] = token
+            b = http('https://data.alpaca.markets/v2/stocks/bars?' + urllib.parse.urlencode(q),
+                     headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS, 'Accept': 'application/json'})
+            if not b:
+                return None
+            j = json.loads(b)
+            for sym, bars in (j.get('bars') or {}).items():
+                res.setdefault(sym, []).extend(bars)
+            token = j.get('next_page_token')
+            if not token:
+                break
     return res
 
 
@@ -1158,7 +1163,7 @@ def update_alpaca(meta, symbols):
     today_ny = now.astimezone(NY).date()
     missing_daily = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json'))]
     refresh_daily = (meta.get('bars_at', '')[:10] != today_ny.isoformat()
-                     or meta.get('bars_history_schema') != 2)
+                     or meta.get('bars_history_schema') != 3)
     daily_targets = symbols if refresh_daily else missing_daily
     if daily_targets:
         daily = alpaca_bars(daily_targets, '1Day', iso(now - timedelta(days=1100)), iso(end))
@@ -1168,11 +1173,11 @@ def update_alpaca(meta, symbols):
             for sym, bars in daily.items():
                 save(f'bars/{sym}.json', [[b['t'][:10], b['o'], b['h'], b['l'], b['c'], b['v']] for b in bars])
             meta['bars_at'] = today_ny.isoformat()
-            meta['bars_history_schema'] = 2
+            meta['bars_history_schema'] = 3
             log('Alpaca: denní svíčky pro', len(daily), 'titulů')
     missing_hourly = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'hourly', f'{sym}.json'))]
     refresh_hourly = (meta.get('hourly_at', '')[:10] != today_ny.isoformat()
-                      or meta.get('hourly_schema') != 1)
+                      or meta.get('hourly_schema') != 2)
     hourly_targets = symbols if refresh_hourly else missing_hourly
     if hourly_targets:
         hourly = alpaca_bars(hourly_targets, '1Hour', iso(now - timedelta(days=120)), iso(end))
@@ -1183,7 +1188,7 @@ def update_alpaca(meta, symbols):
                 save(f'hourly/{sym}.json', [[b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
                                              for b in bars][-1600:])
             meta['hourly_at'] = today_ny.isoformat()
-            meta['hourly_schema'] = 1
+            meta['hourly_schema'] = 2
             log('Alpaca: hodinové svíčky pro', len(hourly), 'titulů')
     ext = load('ext.json', {}).get('sym', {})
     ny = now.astimezone(NY)
