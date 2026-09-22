@@ -670,6 +670,42 @@ def nasdaq_table(doc, table_name, thousands=True):
     return values
 
 
+def nasdaq_events(sym, headers):
+    b = http(f'https://api.nasdaq.com/api/company/{urllib.parse.quote(sym)}/sec-filings?limit=40&sortColumn=filed&sortOrder=desc',
+             headers=headers)
+    try:
+        data = (json.loads(b) if b else {}).get('data') or {}
+    except ValueError:
+        return []
+    rows = data.get('rows') or (data.get('filings') or {}).get('rows') or []
+    events = []
+    for row in rows:
+        form = str(row.get('formType') or row.get('form') or row.get('type') or '')
+        if not form.upper().startswith('8-K'):
+            continue
+        description = str(row.get('description') or row.get('title') or '')
+        low = description.lower()
+        if any(k in low for k in ('result', 'financial', 'earnings')):
+            title = 'Výsledky a finanční situace'
+        elif any(k in low for k in ('director', 'officer', 'management')):
+            title = 'Změna vedení nebo představenstva'
+        elif any(k in low for k in ('acquisition', 'merger', 'asset')):
+            title = 'Akvizice nebo prodej aktiv'
+        elif any(k in low for k in ('agreement', 'contract')):
+            title = 'Významná smlouva'
+        else:
+            title = 'Významná firemní událost'
+        view = row.get('view') or row.get('url') or row.get('link')
+        if isinstance(view, dict):
+            view = view.get('html') or view.get('value') or next(iter(view.values()), None)
+        events.append(clean({'filed': row.get('filed') or row.get('filingDate') or row.get('date'),
+                             'form': form, 'title': title, 'labels': [description] if description else [],
+                             'url': view}))
+        if len(events) >= 18:
+            break
+    return events
+
+
 def update_fundamentals_nasdaq(sym, price=None):
     headers = {'Accept': 'application/json, text/plain, */*', 'Origin': 'https://www.nasdaq.com',
                'Referer': f'https://www.nasdaq.com/market-activity/stocks/{sym.lower()}/financials',
@@ -728,20 +764,23 @@ def update_fundamentals_nasdaq(sym, price=None):
     equity = (instant.get('equity') or {}).get('value')
     qrev = revenue['quarterly']
     growth = qrev[-1]['value'] / qrev[-5]['value'] - 1 if len(qrev) >= 5 and qrev[-5]['value'] else None
+    eps_approx = income_ttm / shares if isinstance(income_ttm, (int, float)) and isinstance(shares, (int, float)) and shares else None
+    pe_ratio = pe_ratio or safe_div(market_cap, income_ttm)
     save(f'fundamentals/{sym}.json', {
         'ticker': sym, 'name': sym, 'updated': NOW.isoformat(),
         'series': {'revenue': revenue, 'net_income': net_income, 'operating_income': operating_income,
                    'operating_cash': operating_cash, 'capex': capex, 'eps_diluted': {'annual': [], 'quarterly': []}},
         'instant': instant,
         'ttm': clean({'revenue': revenue_ttm, 'net_income': income_ttm, 'operating_income': op_ttm,
-                      'operating_cash': cfo_ttm, 'capex': capex_ttm, 'free_cash_flow': fcf_ttm}),
+                      'operating_cash': cfo_ttm, 'capex': capex_ttm, 'free_cash_flow': fcf_ttm,
+                      'eps_diluted': eps_approx}),
         'valuation': clean({'market_cap': market_cap, 'pe_ttm': pe_ratio,
                             'ps_ttm': safe_div(market_cap, revenue_ttm), 'fcf_yield': safe_div(fcf_ttm, market_cap),
                             'net_margin': safe_div(income_ttm, revenue_ttm),
                             'operating_margin': safe_div(op_ttm, revenue_ttm), 'roe': safe_div(income_ttm, equity),
                             'revenue_growth_yoy': growth,
                             'net_debt': debt - cash if isinstance(debt, (int, float)) and isinstance(cash, (int, float)) else None}),
-        'events': [], 'source': 'Nasdaq / firemní výkazy',
+        'events': nasdaq_events(sym, headers), 'source': 'Nasdaq / firemní výkazy',
     })
     log('fundamenty Nasdaq', sym)
     return True
@@ -1479,7 +1518,7 @@ def main():
 
     # Výkazy a 8-K stačí obnovit jednou denně. Tržní cena se do ocenění
     # propíše při tomto denním snapshotu; návštěvník žádný klíč nepotřebuje.
-    if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat():
+    if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat() or meta.get('fundamentals_schema') != 2:
         market_prices = {r.get('ticker'): r.get('price') for r in load('market.json', {}).get('symbols', [])}
         fundamental_ok = 0
         for sym in tickers:
@@ -1495,6 +1534,7 @@ def main():
         if fundamental_ok:
             meta['fundamentals_at'] = NOW.isoformat()
             meta['fundamentals_count'] = fundamental_ok
+            meta['fundamentals_schema'] = 2
 
     # Zbytek sběru (Form 4, 8-K, 13F) vyžaduje SEC. Když SEC blokuje
     # GitHub runner, zachováme starší SEC data, ale fundamenty z Nasdaq už jsou uložené.
