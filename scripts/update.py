@@ -1344,6 +1344,69 @@ def get_json_h(url, headers):
         return None
 
 
+def parse_bar_time(value):
+    try:
+        return datetime.fromisoformat(str(value).replace('Z', '+00:00'))
+    except (TypeError, ValueError):
+        return None
+
+
+def time_adjusted_volume(sym, current, volume, avg_volume):
+    """Porovná dnešní objem s průměrem ve stejnou část obchodního dne.
+
+    Denní objem dělený celodenním průměrem je během seance zavádějící. Pro
+    akcie proto používáme několik předchozích minutových seancí do stejného
+    času; pro krypto totéž v rámci UTC dne. Před otevřením amerického trhu
+    raději RVOL nezobrazíme, než abychom z premarketu vyráběli falešný signál.
+    """
+    if not avg_volume:
+        return None, None, 'unavailable'
+    session = current.get('s')
+    if session == 'post':
+        return volume / avg_volume, avg_volume, 'full_day'
+    ts = parse_bar_time(current.get('t'))
+    if not ts:
+        return None, None, 'unavailable'
+    is_crypto = sym.endswith('-USD')
+    local_now = ts.astimezone(timezone.utc if is_crypto else NY)
+    if not is_crypto:
+        minute = local_now.hour * 60 + local_now.minute
+        if session == 'pre' or minute < 9 * 60 + 30:
+            return None, None, 'premarket'
+        if minute >= 16 * 60:
+            return volume / avg_volume, avg_volume, 'full_day'
+        start_minute = 9 * 60 + 30
+    else:
+        minute = local_now.hour * 60 + local_now.minute
+        start_minute = 0
+
+    rows = load(f'intraday/{sym}.json', [])
+    by_day = {}
+    for row in rows:
+        if not isinstance(row, list) or len(row) < 6:
+            continue
+        dt = parse_bar_time(row[0])
+        if not dt:
+            continue
+        dt = dt.astimezone(timezone.utc if is_crypto else NY)
+        row_minute = dt.hour * 60 + dt.minute
+        if start_minute <= row_minute <= minute:
+            by_day[dt.date().isoformat()] = by_day.get(dt.date().isoformat(), 0) + (row[5] or 0)
+    today = local_now.date().isoformat()
+    actual = by_day.pop(today, None)
+    previous = [v for _, v in sorted(by_day.items())[-5:] if v > 0]
+    if actual is not None and previous:
+        expected = sum(previous) / len(previous)
+        return (actual / expected if expected else None), expected, 'same_time'
+
+    # Nově přidaný titul ještě nemusí mít několik minulých minutových seancí.
+    # Dočasný odhad je výslovně označený a po backfillu se sám nahradí.
+    elapsed = max(1, minute - start_minute + 1)
+    session_minutes = 1440 if is_crypto else 390
+    expected = avg_volume * min(1, elapsed / session_minutes)
+    return (volume / expected if expected else None), expected, 'estimated'
+
+
 def build_market_snapshot(symbols):
     """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
     ext_doc = load('ext.json', {})
@@ -1376,13 +1439,16 @@ def build_market_snapshot(symbols):
         history = bars[-252:]
         completed = bars[-21:-1] if len(bars) > 1 else bars[-20:]
         avg_volume = sum(b[5] or 0 for b in completed) / len(completed) if completed else None
+        rel_volume, expected_volume, rvol_basis = time_adjusted_volume(
+            sym, current, volume, avg_volume)
         name_data = names.get(sym) or []
         name = CFG.get('names', {}).get(sym) or (name_data[1] if len(name_data) > 1 else sym)
         out.append(clean({
             'ticker': sym, 'name': name, 'price': price, 'previous_close': prev_close,
             'change': ((price - prev_close) / prev_close * 100) if prev_close else None,
             'day_high': day_high, 'day_low': day_low, 'volume': volume,
-            'avg_volume': avg_volume, 'rel_volume': (volume / avg_volume) if avg_volume else None,
+            'avg_volume': avg_volume, 'rel_volume': rel_volume,
+            'expected_volume': expected_volume, 'rvol_basis': rvol_basis,
             'year_high': max((b[2] for b in history), default=day_high),
             'year_low': min((b[3] for b in history), default=day_low),
             'insider_buys': buy_counts.get(sym, 0),

@@ -93,9 +93,9 @@
     const gUse = ok(g) ? clamp(g, -0.1, 0.3) : 0.05;
     // 1) analytici
     if(tgt && ok(tgt.avg)){
-      const n = (tgt.buy || 0) + (tgt.hold || 0) + (tgt.sell || 0);
-      m.push({key: 'an', name: 'Cílová cena analytiků', value: tgt.avg,
-        why: `Průměr ${n ? n + ' analytiků' : 'analytiků'} na 12 měsíců dopředu (rozpětí ${usd(tgt.low)} až ${usd(tgt.high)}). Bývá spíš optimistická.`});
+      const n = (tgt.buy || 0) + (tgt.hold || 0) + (tgt.sell || 0),reliable=n>=5;
+      m.push({key: 'an', off: !reliable, name: 'Cílová cena analytiků', value: tgt.avg,
+        why: `${reliable?'Použito':'Nezapočítáno'}: průměr ${n||'neznámého počtu'} analytiků na 12 měsíců dopředu (rozpětí ${usd(tgt.low)} až ${usd(tgt.high)}). Pro výpočet požadujeme alespoň 5 analytiků.`});
     }
     // 2) zisk × férové P/E podle růstu
     const eps = t.eps_diluted;
@@ -116,36 +116,37 @@
     }else{
       m.push({key: 'dcf', off: true, name: 'Volné cash flow (DCF)', value: null, why: 'Firma zatím nevytváří kladné volné cash flow, výpočet nejde použít.'});
     }
-    const vals = m.filter(x => !x.off && ok(x.value) && x.value > 0).map(x => x.value).sort((a, b) => a - b);
-    if(!vals.length) return {methods: m, fair: null};
-    const fair = vals.length === 3 ? vals[1] : vals.reduce((a, b) => a + b, 0) / vals.length;
+    const usable=m.filter(x=>!x.off&&ok(x.value)&&x.value>0),vals=usable.map(x=>x.value).sort((a,b)=>a-b);
+    if(!vals.length) return {methods:m,fair:null,confidence:'none',reason:'Pro spolehlivý odhad není dostupná ani jedna použitelná metoda.'};
+    const mid=Math.floor(vals.length/2),fair=vals.length%2?vals[mid]:(vals[mid-1]+vals[mid])/2;
     const diff = (fair / price - 1) * 100;
     const spread = vals[vals.length - 1] / vals[0];
-    const verdict = diff > 15 ? 'under' : diff < -15 ? 'over' : 'fair';
-    return {methods: m, fair, diff, verdict, lo: vals[0], hi: vals[vals.length - 1], unsure: vals.length === 1 || spread > 2, onlyAnalysts: vals.length === 1 && m[0].key === 'an' && !m[0].off};
+    const confidence=vals.length>=3&&spread<=1.75?'high':vals.length>=2&&spread<=2?'medium':'low';
+    const verdict=vals.length>=2?(diff>15?'under':diff<-15?'over':'fair'):null;
+    return {methods:m,fair,diff,verdict,confidence,lo:vals[0],hi:vals[vals.length-1],unsure:confidence==='low',onlyAnalysts:usable.length===1&&usable[0].key==='an'};
   }
 
   /* ---------- panel: férová hodnota ---------- */
   function fairHtml(sym, price, ev, hasFund){
     const label = {under: 'Podhodnocená', fair: 'Férově oceněná', over: 'Nadhodnocená'};
+    const methods=ev.methods.map(x=>`<li class="${x.off?'off':''}"><b>${esc(x.name)}</b><strong>${x.off||!ok(x.value)?'—':usd(x.value)}</strong><small>${esc(x.why)}</small></li>`).join('');
     if(!ev.fair){
       return `<div class="panel-head"><div><p class="eyebrow">FÉROVÁ HODNOTA</p><h2>Je ${esc(sym)} levná, nebo drahá?</h2></div></div><div class="fv-body">
-        <div class="fv-verdict"><span class="fv-badge na">Nelze určit</span></div>
-        <p class="fv-note">${hasFund ? 'Firma nemá kladný zisk ani cash flow a analytici k ní nevydávají cílovou cenu, takže férovou hodnotu nejde rozumně spočítat.' : 'U ETF, komodit a kryptoměn nejsou firemní výkazy ani cílové ceny analytiků, takže férovou hodnotu tímto způsobem spočítat nejde. Cenu určuje hlavně nabídka a poptávka.'}</p></div>`;
+        <div class="fv-verdict"><span class="fv-badge na">Nelze spolehlivě určit</span></div>${methods?`<ul class="fv-methods">${methods}</ul>`:''}
+        <p class="fv-note">${hasFund ? ev.reason : 'U ETF, komodit a kryptoměn nejsou firemní výkazy ani cílové ceny analytiků, takže férovou hodnotu tímto způsobem spočítat nejde. Cenu určuje hlavně nabídka a poptávka.'}</p></div>`;
     }
     const lo = Math.min(ev.lo, price) * 0.85, hi = Math.max(ev.hi, price) * 1.1;
     const pos = v => clamp((v - lo) / (hi - lo) * 100, 2, 98);
-    const methods = ev.methods.map(x => `<li class="${x.off ? 'off' : ''}"><b>${esc(x.name)}</b><strong>${x.off ? '—' : usd(x.value)}</strong><small>${esc(x.why)}</small></li>`).join('');
     return `<div class="panel-head"><div><p class="eyebrow">FÉROVÁ HODNOTA</p><h2>Je ${esc(sym)} levná, nebo drahá?</h2></div></div><div class="fv-body">
-      <div class="fv-verdict"><span class="fv-badge ${ev.verdict}">${label[ev.verdict]}</span>${ev.unsure ? '<span class="fv-badge na">odhad je nejistý</span>' : ''}</div>
-      <div class="fv-big">${usd(ev.fair)}<small>férová hodnota · dnes ${usd(price)} (${ev.diff > 0 ? 'o ' + num(ev.diff, 0) + ' % levnější' : 'o ' + num(-ev.diff, 0) + ' % dražší'})</small></div>
+      <div class="fv-verdict"><span class="fv-badge ${ev.verdict||'na'}">${ev.verdict?label[ev.verdict]:'Orientační odhad'}</span><span class="fv-badge na">spolehlivost ${ev.confidence==='high'?'vyšší':ev.confidence==='medium'?'střední':'nízká'}</span></div>
+      <div class="fv-big">${usd(ev.fair)}<small>${ev.verdict?'střed použitých metod':'pouze jedna použitelná metoda'} · dnes ${usd(price)} (${ev.diff > 0 ? 'rozdíl +' + num(ev.diff, 0) + ' %' : 'rozdíl ' + num(ev.diff, 0) + ' %'})</small></div>
       <div class="fv-scale" aria-hidden="true"><div class="fv-track"></div>
         <div class="fv-mark fvm" style="left:${pos(ev.fair)}%">Férová<i></i></div>
         <div class="fv-mark" style="left:${pos(price)}%"><i></i><span>Dnes</span></div>
       </div>
       <div class="fv-ends"><span>levné</span><span>drahé</span></div>
       <ul class="fv-methods">${methods}</ul>
-      <p class="fv-note">${ev.onlyAnalysts ? 'Firma je ve ztrátě, verdikt proto stojí jen na cílových cenách analytiků. ' : ''}Férová hodnota je medián použitých metod. Hranice pro verdikt je ±15 %. Jde o zjednodušený odhad, ne o investiční doporučení.</p></div>`;
+      <p class="fv-note">Verdikt podhodnocená/nadhodnocená zobrazujeme jen při nejméně dvou použitelných metodách. Střed je medián; u sudého počtu průměr dvou prostředních hodnot. Hranice verdiktu je ±15 %. Jde o zjednodušený odhad, ne o investiční doporučení.</p></div>`;
   }
 
   /* ---------- panel: výhled analytiků ---------- */
@@ -199,10 +200,11 @@
     const rec = n ? `<div class="tg-rec" aria-hidden="true">
         <i style="width:${tgt.buy / n * 100}%;background:var(--green)"></i><i style="width:${tgt.hold / n * 100}%;background:var(--amber)"></i><i style="width:${tgt.sell / n * 100}%;background:var(--red)"></i></div>
       <div class="tg-recl"><span>Koupit ${tgt.buy}</span><span>Držet ${tgt.hold}</span><span>Prodat ${tgt.sell}</span><span>celkem ${n} analytiků</span></div>` : '';
+    const sample=n&&n<5?`<p class="fv-note"><b>Nízká spolehlivost:</b> konsenzus tvoří jen ${n} analytici, proto ho nezapočítáváme do férové hodnoty.</p>`:'';
     return head + '<div class="fv-body">' + svg + `<div class="tg-legend">
         <span>Max <b style="color:var(--green)">${usd(tgt.high)}</b> ${pct(up(tgt.high))}</span>
         <span>Průměr <b style="color:var(--blue)">${usd(tgt.avg)}</b> ${pct(up(tgt.avg))}</span>
-        <span>Min <b style="color:var(--red)">${usd(tgt.low)}</b> ${pct(up(tgt.low))}</span></div>${rec}
+        <span>Min <b style="color:var(--red)">${usd(tgt.low)}</b> ${pct(up(tgt.low))}</span></div>${rec}${sample}
       <p class="fv-note">Čáry vedou od dnešní ceny k cílovým cenám analytiků za 12 měsíců. Nejde o předpověď vývoje po cestě, jen o to, kde analytici vidí cenu na konci období.</p></div>`;
   }
 

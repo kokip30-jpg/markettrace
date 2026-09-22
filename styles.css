@@ -42,9 +42,14 @@ body.sheet-lock{overflow:hidden}
 button.pulse-row{width:100%;border:0;background:none;padding:0;text-align:left;cursor:pointer;font:inherit;color:inherit}
 button.pulse-row:hover b{color:var(--blue)}
 .pulse-note{color:var(--muted);font-size:11px;line-height:1.4;margin:8px 0 0}
+.stat-with-note span small{display:block;max-width:150px;color:var(--muted);font-size:9px;line-height:1.25}
+.list-footer{display:flex;align-items:center;justify-content:center;gap:14px;padding:14px 18px;color:var(--muted);font-size:12px}
+.list-tools,.guru-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}.list-tools select{height:38px;border:1px solid var(--line);border-radius:9px;background:var(--bg2);color:var(--text);padding:0 11px}.guru-toolbar .filter-chips{flex:1}.freshness-note{margin:-7px 0 14px;padding:11px 14px;border:1px solid color-mix(in srgb,var(--amber) 45%,var(--line));border-radius:11px;background:color-mix(in srgb,var(--amber) 8%,var(--panel));color:var(--muted);font-size:12px}.freshness-note b{color:var(--text)}
+.guru-card.older,.guru-card.stale{opacity:.72}.guru-title .freshness{max-width:150px;text-align:center}.guru-title .freshness.current{background:color-mix(in srgb,var(--green) 14%,transparent);color:var(--green)}.guru-title .freshness.older{background:color-mix(in srgb,var(--amber) 14%,transparent);color:var(--amber)}.guru-title .freshness.stale{background:color-mix(in srgb,var(--red) 13%,transparent);color:var(--red)}.guru-change-count{display:block;margin:7px 0 13px;color:var(--muted)}.smart-row>span small{display:block;color:var(--muted);font-size:9px}.compare-loading{margin:18px}
 @media(max-width:760px){
 .sidebar h3{display:block;margin:12px 0 0;font-size:13px}
 .market-pulse{display:flex;gap:8px;overflow-x:auto;margin-top:8px;padding-bottom:4px;-webkit-overflow-scrolling:touch}
 .market-pulse .pulse-row{flex:none;width:auto;display:flex;flex-direction:column;gap:1px;min-width:96px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2);font-size:12px}
 .pulse-note{display:none}
+.list-tools,.guru-toolbar{align-items:stretch;flex-direction:column}.list-tools .search-field,.list-tools select,.guru-toolbar .search-field{width:100%}.list-tools input,.guru-toolbar input{width:100%}.guru-toolbar .filter-chips{width:100%}.list-footer{justify-content:space-between}
 }
