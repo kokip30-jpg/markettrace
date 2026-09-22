@@ -622,6 +622,131 @@ def update_fundamentals(sym, tmap, price=None):
     return True
 
 
+def nasdaq_json(path):
+    return get_json('https://api.nasdaq.com/api/' + path)
+
+
+def nasdaq_number(value, thousands=False):
+    s = str(value or '').strip().replace('$', '').replace(',', '').replace('%', '')
+    if not s or s in ('--', 'N/A'):
+        return None
+    negative = s.startswith('(') and s.endswith(')')
+    s = s.strip('()')
+    mult = 1
+    if s[-1:].upper() in ('K', 'M', 'B', 'T'):
+        mult = {'K': 1e3, 'M': 1e6, 'B': 1e9, 'T': 1e12}[s[-1].upper()]
+        s = s[:-1]
+    try:
+        n = float(s) * mult * (1000 if thousands and mult == 1 else 1)
+        return -n if negative else n
+    except ValueError:
+        return None
+
+
+def nasdaq_table(doc, table_name, thousands=True):
+    table = ((doc or {}).get('data') or {}).get(table_name) or {}
+    headers, rows = table.get('headers') or {}, table.get('rows') or []
+    by_name = {str(r.get('value1') or '').strip().lower(): r for r in rows}
+    periods = []
+    for key in ('value2', 'value3', 'value4', 'value5'):
+        raw_date = headers.get(key)
+        if not raw_date:
+            continue
+        try:
+            end = datetime.strptime(raw_date, '%m/%d/%Y').date().isoformat()
+        except ValueError:
+            end = raw_date
+        periods.append((key, end))
+    def values(*labels, absolute=False):
+        row = next((by_name.get(label.lower()) for label in labels if by_name.get(label.lower())), None)
+        out = []
+        for key, end in periods:
+            val = nasdaq_number((row or {}).get(key), thousands)
+            if absolute and isinstance(val, (int, float)):
+                val = abs(val)
+            if val is not None:
+                out.append({'end': end, 'value': val})
+        return sorted(out, key=lambda r: r['end'])
+    return values
+
+
+def update_fundamentals_nasdaq(sym, price=None):
+    headers = {'Accept': 'application/json, text/plain, */*', 'Origin': 'https://www.nasdaq.com',
+               'Referer': f'https://www.nasdaq.com/market-activity/stocks/{sym.lower()}/financials',
+               'User-Agent': 'Mozilla/5.0 (compatible; MarketTrace/1.0)'}
+    def fetch(frequency):
+        b = http(f'https://api.nasdaq.com/api/company/{urllib.parse.quote(sym)}/financials?frequency={frequency}', headers=headers)
+        try:
+            return json.loads(b) if b else None
+        except ValueError:
+            return None
+    annual_doc, quarterly_doc = fetch(1), fetch(2)
+    if not annual_doc and not quarterly_doc:
+        return False
+    annual_income = nasdaq_table(annual_doc, 'incomeStatementTable')
+    quarterly_income = nasdaq_table(quarterly_doc, 'incomeStatementTable')
+    annual_cash = nasdaq_table(annual_doc, 'cashFlowTable')
+    quarterly_cash = nasdaq_table(quarterly_doc, 'cashFlowTable')
+    annual_balance = nasdaq_table(annual_doc, 'balanceSheetTable')
+    quarterly_balance = nasdaq_table(quarterly_doc, 'balanceSheetTable')
+    def series(a, q):
+        return {'annual': a[-6:], 'quarterly': q[-8:]}
+    revenue = series(annual_income('Total Revenue'), quarterly_income('Total Revenue'))
+    net_income = series(annual_income('Net Income'), quarterly_income('Net Income'))
+    operating_income = series(annual_income('Operating Income'), quarterly_income('Operating Income'))
+    operating_cash = series(annual_cash('Net Cash Flow-Operating'), quarterly_cash('Net Cash Flow-Operating'))
+    capex = series(annual_cash('Capital Expenditures', absolute=True), quarterly_cash('Capital Expenditures', absolute=True))
+    def latest(values):
+        rows = values or []
+        return {'end': rows[-1]['end'], 'value': rows[-1]['value']} if rows else None
+    cash_rows = quarterly_balance('Cash and Cash Equivalents') or annual_balance('Cash and Cash Equivalents')
+    assets_rows = quarterly_balance('Total Assets') or annual_balance('Total Assets')
+    liabilities_rows = quarterly_balance('Total Liabilities') or annual_balance('Total Liabilities')
+    equity_rows = quarterly_balance('Total Equity') or annual_balance('Total Equity')
+    short_rows = quarterly_balance('Short-Term Debt / Current Portion of Long-Term Debt') or annual_balance('Short-Term Debt / Current Portion of Long-Term Debt')
+    long_rows = quarterly_balance('Long-Term Debt') or annual_balance('Long-Term Debt')
+    summary_b = http(f'https://api.nasdaq.com/api/quote/{urllib.parse.quote(sym)}/summary?assetclass=stocks', headers=headers)
+    try:
+        summary = ((json.loads(summary_b) if summary_b else {}).get('data') or {}).get('summaryData') or {}
+    except ValueError:
+        summary = {}
+    market_cap = nasdaq_number((summary.get('MarketCap') or {}).get('value'))
+    pe_ratio = nasdaq_number((summary.get('PERatio') or {}).get('value'))
+    shares = market_cap / price if isinstance(market_cap, (int, float)) and isinstance(price, (int, float)) and price else None
+    instant = {'cash': latest(cash_rows), 'assets': latest(assets_rows), 'liabilities': latest(liabilities_rows),
+               'equity': latest(equity_rows), 'debt_current': latest(short_rows), 'debt_long': latest(long_rows)}
+    if shares:
+        instant['shares'] = {'end': TODAY.isoformat(), 'value': shares}
+    def ttm_or_annual(s):
+        vals = [r['value'] for r in s['quarterly'][-4:]]
+        return sum(vals) if len(vals) == 4 else (s['annual'][-1]['value'] if s['annual'] else None)
+    revenue_ttm, income_ttm = ttm_or_annual(revenue), ttm_or_annual(net_income)
+    op_ttm, cfo_ttm, capex_ttm = ttm_or_annual(operating_income), ttm_or_annual(operating_cash), ttm_or_annual(capex)
+    fcf_ttm = cfo_ttm - capex_ttm if isinstance(cfo_ttm, (int, float)) and isinstance(capex_ttm, (int, float)) else None
+    cash = (instant.get('cash') or {}).get('value')
+    debt = sum((instant.get(k) or {}).get('value') or 0 for k in ('debt_current', 'debt_long')) or None
+    equity = (instant.get('equity') or {}).get('value')
+    qrev = revenue['quarterly']
+    growth = qrev[-1]['value'] / qrev[-5]['value'] - 1 if len(qrev) >= 5 and qrev[-5]['value'] else None
+    save(f'fundamentals/{sym}.json', {
+        'ticker': sym, 'name': sym, 'updated': NOW.isoformat(),
+        'series': {'revenue': revenue, 'net_income': net_income, 'operating_income': operating_income,
+                   'operating_cash': operating_cash, 'capex': capex, 'eps_diluted': {'annual': [], 'quarterly': []}},
+        'instant': instant,
+        'ttm': clean({'revenue': revenue_ttm, 'net_income': income_ttm, 'operating_income': op_ttm,
+                      'operating_cash': cfo_ttm, 'capex': capex_ttm, 'free_cash_flow': fcf_ttm}),
+        'valuation': clean({'market_cap': market_cap, 'pe_ttm': pe_ratio,
+                            'ps_ttm': safe_div(market_cap, revenue_ttm), 'fcf_yield': safe_div(fcf_ttm, market_cap),
+                            'net_margin': safe_div(income_ttm, revenue_ttm),
+                            'operating_margin': safe_div(op_ttm, revenue_ttm), 'roe': safe_div(income_ttm, equity),
+                            'revenue_growth_yoy': growth,
+                            'net_debt': debt - cash if isinstance(debt, (int, float)) and isinstance(cash, (int, float)) else None}),
+        'events': [], 'source': 'Nasdaq / firemní výkazy',
+    })
+    log('fundamenty Nasdaq', sym)
+    return True
+
+
 # ---------------------------------------------------------------- guru (13F)
 STOP = set('INC INCORPORATED CORP CORPORATION CO COMPANY LTD LIMITED PLC HLDGS HOLDINGS HOLDING GROUP GRP '
            'CL CLASS A B C COM NEW DEL THE SA NV AG LP LLC SHS ORD ADR SPONSORED SPON DE TR TRUST'.split())
@@ -1340,15 +1465,13 @@ def main():
 
     if meta.get('feed', {}).get('buys', 0) == 0 and meta.get('feed', {}).get('sells', 0) == 0:
         meta.pop('backfilled', None)  # historie se zatím nestáhla
-    if not probe_sec():
+    sec_ok = probe_sec()
+    if not sec_ok:
         log('SEC odmítá dotazy:', DEBUG['probe'])
         meta['error'] = 'SEC odmítá dotazy'
-        meta['updated'] = datetime.now(timezone.utc).isoformat()
-        save('meta.json', meta)
-        save('debug.json', DEBUG)
-        return
-    meta.pop('error', None)
-    tmap = ticker_map(meta)
+    else:
+        meta.pop('error', None)
+    tmap = ticker_map(meta) if sec_ok else load('tickers.json', {})
     rev = {}
     for t, (cik, _) in tmap.items():
         rev.setdefault(str(int(cik)), t)
@@ -1363,12 +1486,23 @@ def main():
             if not time_left():
                 break
             try:
-                fundamental_ok += bool(update_fundamentals(sym, tmap, market_prices.get(sym)))
+                got_fundamentals = update_fundamentals(sym, tmap, market_prices.get(sym)) if sec_ok else False
+                if not got_fundamentals:
+                    got_fundamentals = update_fundamentals_nasdaq(sym, market_prices.get(sym))
+                fundamental_ok += bool(got_fundamentals)
             except Exception as e:
                 log('CHYBA fundamenty', sym, repr(e))
         if fundamental_ok:
             meta['fundamentals_at'] = NOW.isoformat()
             meta['fundamentals_count'] = fundamental_ok
+
+    # Zbytek sběru (Form 4, 8-K, 13F) vyžaduje SEC. Když SEC blokuje
+    # GitHub runner, zachováme starší SEC data, ale fundamenty z Nasdaq už jsou uložené.
+    if not sec_ok:
+        meta['updated'] = datetime.now(timezone.utc).isoformat()
+        save('meta.json', meta)
+        save('debug.json', DEBUG)
+        return
 
     try:
         update_feed(meta)

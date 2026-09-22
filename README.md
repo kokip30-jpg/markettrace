@@ -19,7 +19,7 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 - vysvětlitelné MarketTrace skóre rozdělené na trend, momentum, objem, Smart Money a stabilitu;
 - pokročilý screener podle relativního objemu, insider nákupů, 52týdenního pásma a skóre;
 - časová osa cenových a SEC událostí v detailu akcie;
-- čtvrtletní a roční finanční výkazy z oficiálních SEC XBRL dat;
+- čtvrtletní a roční finanční výkazy z SEC XBRL; při dočasné blokaci SEC používá server veřejné firemní výkazy Nasdaq;
 - ocenění P/E, P/S, FCF výnos, ROE, marže a orientační finanční zdraví;
 - automaticky popsané významné události z formulářů 8-K;
 - rizikový panel s volatilitou, maximálním propadem, ATR a betou vůči SPY;
