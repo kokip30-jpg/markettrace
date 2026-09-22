@@ -1321,27 +1321,15 @@ def update_vix(meta, sym='VIX'):
             ts = iso(now)
         ext[sym] = clean({'p': price, 't': ts, 's': 'regular', 'pc': fnum(d.get('prev_day_close')),
                           'h': fnum(d.get('high')), 'l': fnum(d.get('low')), 'v': 0})
-    ch = get_json_h('https://cdn.cboe.com/api/global/delayed_quotes/charts/_VIX.json', hdr)
-    pts = (ch or {}).get('data') or []
     intraday = []
-    for pnt in pts if isinstance(pts, list) else []:
-        pr = pnt.get('price') or {}
-        t = str(pnt.get('datetime') or '')
-        c = fnum(pr.get('close') if isinstance(pr, dict) else pr)
-        if not t or c is None:
-            continue
-        try:
-            ts = iso(datetime.fromisoformat(t.replace('Z', '')).replace(tzinfo=NY))
-        except ValueError:
-            continue
-        o = fnum(pr.get('open')) if isinstance(pr, dict) else c
-        h = fnum(pr.get('high')) if isinstance(pr, dict) else c
-        l = fnum(pr.get('low')) if isinstance(pr, dict) else c
-        intraday.append([ts, o or c, h or c, l or c, c, 0])
-    if intraday:
-        merged = {r[0]: r for r in load(f'intraday/{sym}.json', []) if isinstance(r, list)}
-        merged.update({r[0]: r for r in intraday})
-        save(f'intraday/{sym}.json', sorted(merged.values(), key=lambda r: r[0])[-5000:])
+    if price and sym in ext:
+        tsq = ext[sym]['t']
+        intraday = [[tsq, price, price, price, price, 0]]
+        rows = [r for r in load(f'intraday/{sym}.json', []) if isinstance(r, list)]
+        if not rows or rows[-1][0] != tsq:
+            rows.append(intraday[0])
+            cutoff = iso(now - timedelta(days=10))
+            save(f'intraday/{sym}.json', [r for r in rows if r[0] >= cutoff][-5000:])
     ext_doc['sym'] = ext
     save('ext.json', ext_doc)
     log('VIX:', price, 'intraday bodů', len(intraday))
@@ -1675,9 +1663,10 @@ def main():
 
     crypto_pairs = [p.upper() for p in CFG.get('crypto', [])]
     crypto_syms = [p.replace('/', '-') for p in crypto_pairs]
+    all_symbols = market_symbols + crypto_syms + ['VIX']
     for step in (lambda: update_alpaca(meta, market_symbols), lambda: update_crypto(meta, crypto_pairs),
                  lambda: update_vix(meta),
-                 lambda: build_market_snapshot(market_symbols + crypto_syms + ['VIX']), lambda: update_fx(meta)):
+                 lambda: build_market_snapshot(all_symbols), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:
@@ -1779,7 +1768,7 @@ def main():
     except Exception as e:
         log('CHYBA upozornění:', repr(e))
     try:
-        build_market_snapshot(market_symbols)
+        build_market_snapshot(all_symbols)
     except Exception as e:
         log('CHYBA tržní snapshot:', repr(e))
     meta['alpaca'] = bool(AK and AS)
