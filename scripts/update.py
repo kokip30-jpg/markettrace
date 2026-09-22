@@ -25,6 +25,7 @@ NOW = datetime.now(timezone.utc)
 TODAY = NOW.date()
 START = time.time()
 DEADLINE = START + CFG.get('max_minutes', 38) * 60
+MARKET_ONLY = '--market-only' in sys.argv
 
 
 def log(*a):
@@ -62,14 +63,14 @@ def probe_sec():
             req = urllib.request.Request('https://data.sec.gov/submissions/CIK0000320193.json',
                                          headers={'User-Agent': ua, 'Accept-Encoding': 'gzip, deflate'})
             with urllib.request.urlopen(req, timeout=30) as r:
-                DEBUG['probe'].append({'ua': ua, 'code': r.status})
+                DEBUG['probe'].append({'code': r.status})
                 UA = ua
                 return True
         except urllib.error.HTTPError as e:
             note_error('probe ' + ua, e.code, e.read())
-            DEBUG['probe'].append({'ua': ua, 'code': e.code})
+            DEBUG['probe'].append({'code': e.code})
         except Exception as e:
-            DEBUG['probe'].append({'ua': ua, 'error': repr(e)[:200]})
+            DEBUG['probe'].append({'error': type(e).__name__})
         time.sleep(2)
     return False
 
@@ -1762,6 +1763,10 @@ def update_targets(symbols):
 def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
+    legacy_options = os.path.join(DATA, 'options.json')
+    if os.path.exists(legacy_options):
+        os.unlink(legacy_options)
+    meta.pop('options_at', None)
     tickers = [t.upper() for t in CFG.get('tickers', [])]
     market_symbols = list(dict.fromkeys(tickers + [t.upper() for t in CFG.get('market_symbols', [])]))
 
@@ -1775,6 +1780,17 @@ def main():
             step()
         except Exception as e:
             log('CHYBA:', repr(e))
+
+    # Pětiminutový běh obnovuje jen ceny a grafy. SEC, 13F a fundamenty jsou
+    # výrazně pomalejší a spouštějí se samostatným plným během.
+    if MARKET_ONLY:
+        meta['alpaca'] = bool(AK and AS)
+        meta['market_at'] = load('market.json', {}).get('updated') or datetime.now(timezone.utc).isoformat()
+        meta['updated'] = datetime.now(timezone.utc).isoformat()
+        save('meta.json', meta)
+        save('debug.json', DEBUG)
+        log('rychlá aktualizace hotová za', round(time.time() - START), 's')
+        return
 
     if meta.get('feed', {}).get('buys', 0) == 0 and meta.get('feed', {}).get('sells', 0) == 0:
         meta.pop('backfilled', None)  # historie se zatím nestáhla
@@ -1811,7 +1827,9 @@ def main():
                 log('CHYBA fundamenty', sym, repr(e))
         if fundamental_ok:
             meta['fundamentals_at'] = NOW.isoformat()
-            meta['fundamentals_count'] = fundamental_ok
+            meta['fundamentals_refreshed'] = fundamental_ok
+            meta['fundamentals_count'] = sum(
+                os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json')) for sym in tickers)
             meta['fundamentals_schema'] = 2
 
     try:
@@ -1822,6 +1840,7 @@ def main():
     # Zbytek sběru (Form 4, 8-K, 13F) vyžaduje SEC. Když SEC blokuje
     # GitHub runner, zachováme starší SEC data, ale fundamenty z Nasdaq už jsou uložené.
     if not sec_ok:
+        meta['market_at'] = load('market.json', {}).get('updated') or datetime.now(timezone.utc).isoformat()
         meta['updated'] = datetime.now(timezone.utc).isoformat()
         save('meta.json', meta)
         save('debug.json', DEBUG)
@@ -1829,6 +1848,7 @@ def main():
 
     try:
         update_feed(meta)
+        meta['feed_at'] = datetime.now(timezone.utc).isoformat()
     except Exception as e:
         log('CHYBA přehled:', repr(e))
 
@@ -1877,6 +1897,7 @@ def main():
         log('CHYBA tržní snapshot:', repr(e))
     meta['alpaca'] = bool(AK and AS)
     meta['notify'] = bool(TOPIC)
+    meta['market_at'] = load('market.json', {}).get('updated') or datetime.now(timezone.utc).isoformat()
     meta['updated'] = datetime.now(timezone.utc).isoformat()
     save('meta.json', meta)
     save('debug.json', DEBUG)

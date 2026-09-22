@@ -16,7 +16,7 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 
 ## Analytické funkce
 
-- vysvětlitelné MarketTrace skóre rozdělené na trend, momentum, objem, Smart Money a stabilitu;
+- orientační a vysvětlitelné MarketTrace skóre rozdělené na trend, momentum, objem, Smart Money a stabilitu;
 - pokročilý screener podle relativního objemu, insider nákupů, 52týdenního pásma a skóre;
 - časová osa cenových a SEC událostí v detailu akcie;
 - čtvrtletní a roční finanční výkazy z SEC XBRL; při dočasné blokaci SEC používá server veřejné firemní výkazy Nasdaq;
@@ -29,7 +29,7 @@ Návštěvník aplikace nezadává žádný API klíč. GitHub Actions připravu
 - porovnání dvou až čtyř akcií;
 - Smart Money přehled nových, navýšených, snížených a ukončených 13F pozic.
 
-Automat běží v pracovní dny každých 5 minut a o víkendu každé 2 hodiny. GitHub může naplánovaný běh při vytížení opozdit.
+Ceny a grafy se v pracovní dny obnovují každých 5 minut. SEC, 13F a fundamenty se obnovují každé 2 hodiny, o víkendu každé 4 hodiny. GitHub může naplánovaný běh při vytížení opozdit.
 
 ## Struktura
 
@@ -38,6 +38,7 @@ Automat běží v pracovní dny každých 5 minut a o víkendu každé 2 hodiny.
 - `app.js` – screener, detail titulu, insideři, guru a lokální portfolio;
 - `config.json` – sledované tituly a investoři;
 - `scripts/update.py` – serverová příprava dat;
+- `scripts/validate_data.py` – kontrola úplnosti dat a produkční smoke test;
 - `.github/workflows/update.yml` – pravidelná aktualizace a nasazení.
 
 ## Tajné proměnné GitHub Actions
@@ -48,4 +49,4 @@ Automat běží v pracovní dny každých 5 minut a o víkendu každé 2 hodiny.
 
 Portfolio a watchlist se ukládají pouze do prohlížeče návštěvníka. Portfolio lze exportovat a znovu importovat jako JSON.
 
-Sledovaný seznam zahrnuje 60+ likvidních titulů: velké technologie, čipy, AI, krypto těžaře a treasury společnosti, růstové akcie, letectví a novou energetiku. Další ticker stačí přidat do `config.json`.
+Sledovaný seznam zahrnuje 100 likvidních titulů: velké technologie, čipy, AI, krypto těžaře a treasury společnosti, růstové akcie, letectví a novou energetiku. Další ticker stačí přidat do `config.json`.

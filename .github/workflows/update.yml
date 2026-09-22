@@ -2,8 +2,9 @@ name: Data SEC a nasazení webu
 
 on:
   schedule:
-    - cron: '*/5 * * * 1-5'     # pracovní dny každých 5 minut
-    - cron: '17 */2 * * 0,6'    # víkend každé 2 hodiny
+    - cron: '*/5 * * * 1-5'     # rychlé ceny a grafy každých 5 minut
+    - cron: '27 */2 * * * 1-5'  # SEC, 13F a fundamenty každé 2 hodiny
+    - cron: '27 */4 * * 0,6'    # o víkendu plná aktualizace každé 4 hodiny
   workflow_dispatch:
   push:
     branches: [main]
@@ -40,12 +41,20 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Stáhnout data (SEC, Alpaca, ČNB)
+      - name: Stáhnout data
         env:
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
-        run: python scripts/update.py
+        run: |
+          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "*/5 * * * 1-5" ]]; then
+            python scripts/update.py --market-only
+          else
+            python scripts/update.py
+          fi
+
+      - name: Ověřit úplnost dat
+        run: python scripts/validate_data.py
 
       - name: Uložit data (větev data, jen poslední verze)
         env:
@@ -76,3 +85,6 @@ jobs:
 
       - if: steps.deploy.outcome == 'failure'
         uses: actions/deploy-pages@v4
+
+      - name: Ověřit zveřejněný web
+        run: python scripts/validate_data.py --base-url "https://kokip30-jpg.github.io/markettrace/"
