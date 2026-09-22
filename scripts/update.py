@@ -1288,6 +1288,74 @@ def update_crypto(meta, pairs):
     return done
 
 
+# ---------------------------------------------------------------- index volatility VIX (Cboe, zpoždění ~15 min)
+def update_vix(meta, sym='VIX'):
+    now = datetime.now(timezone.utc)
+    hdr = {'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124 Safari/537.36',
+           'Accept': 'application/json, text/csv, */*', 'Referer': 'https://www.cboe.com/'}
+    if meta.get('vix_bars_at', '')[:10] != now.date().isoformat() or not os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json')):
+        b = http('https://cdn.cboe.com/api/global/us_indices/daily_prices/VIX_History.csv', headers=hdr)
+        rows = []
+        for line in (b or b'').decode('utf-8', 'replace').splitlines()[1:]:
+            parts = line.strip().split(',')
+            if len(parts) < 5:
+                continue
+            m = re.match(r'(\d{1,2})/(\d{1,2})/(\d{4})', parts[0])
+            d = f'{m.group(3)}-{int(m.group(1)):02d}-{int(m.group(2)):02d}' if m else parts[0][:10]
+            vals = [fnum(x) for x in parts[1:5]]
+            if all(v is not None for v in vals):
+                rows.append([d] + vals + [0])
+        if rows:
+            save(f'bars/{sym}.json', rows[-400:])
+            meta['vix_bars_at'] = now.isoformat()
+    ext_doc = load('ext.json', {})
+    ext = ext_doc.get('sym', {})
+    q = get_json_h('https://cdn.cboe.com/api/global/delayed_quotes/quotes/_VIX.json', hdr)
+    d = (q or {}).get('data') or {}
+    price = fnum(d.get('current_price') or d.get('close'))
+    if price:
+        t = str(d.get('last_trade_time') or '')
+        try:
+            ts = iso(datetime.fromisoformat(t.replace('Z', '')).replace(tzinfo=NY)) if t else iso(now)
+        except ValueError:
+            ts = iso(now)
+        ext[sym] = clean({'p': price, 't': ts, 's': 'regular', 'pc': fnum(d.get('prev_day_close')),
+                          'h': fnum(d.get('high')), 'l': fnum(d.get('low')), 'v': 0})
+    ch = get_json_h('https://cdn.cboe.com/api/global/delayed_quotes/charts/_VIX.json', hdr)
+    pts = (ch or {}).get('data') or []
+    intraday = []
+    for pnt in pts if isinstance(pts, list) else []:
+        pr = pnt.get('price') or {}
+        t = str(pnt.get('datetime') or '')
+        c = fnum(pr.get('close') if isinstance(pr, dict) else pr)
+        if not t or c is None:
+            continue
+        try:
+            ts = iso(datetime.fromisoformat(t.replace('Z', '')).replace(tzinfo=NY))
+        except ValueError:
+            continue
+        o = fnum(pr.get('open')) if isinstance(pr, dict) else c
+        h = fnum(pr.get('high')) if isinstance(pr, dict) else c
+        l = fnum(pr.get('low')) if isinstance(pr, dict) else c
+        intraday.append([ts, o or c, h or c, l or c, c, 0])
+    if intraday:
+        merged = {r[0]: r for r in load(f'intraday/{sym}.json', []) if isinstance(r, list)}
+        merged.update({r[0]: r for r in intraday})
+        save(f'intraday/{sym}.json', sorted(merged.values(), key=lambda r: r[0])[-5000:])
+    ext_doc['sym'] = ext
+    save('ext.json', ext_doc)
+    log('VIX:', price, 'intraday bodů', len(intraday))
+    return [sym] if price or os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json')) else []
+
+
+def get_json_h(url, headers):
+    b = http(url, headers=headers)
+    try:
+        return json.loads(b) if b else None
+    except ValueError:
+        return None
+
+
 def build_market_snapshot(symbols):
     """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
     ext_doc = load('ext.json', {})
@@ -1608,7 +1676,8 @@ def main():
     crypto_pairs = [p.upper() for p in CFG.get('crypto', [])]
     crypto_syms = [p.replace('/', '-') for p in crypto_pairs]
     for step in (lambda: update_alpaca(meta, market_symbols), lambda: update_crypto(meta, crypto_pairs),
-                 lambda: build_market_snapshot(market_symbols + crypto_syms), lambda: update_fx(meta)):
+                 lambda: update_vix(meta),
+                 lambda: build_market_snapshot(market_symbols + crypto_syms + ['VIX']), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:

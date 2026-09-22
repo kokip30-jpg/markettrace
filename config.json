@@ -17,7 +17,8 @@
     "DBA",
     "TLT",
     "IBIT",
-    "ETHA"
+    "ETHA",
+    "VIXY"
   ],
   "tickers": [
     "NVDA",
@@ -218,6 +219,8 @@
     "SPY": "S&P 500 · SPDR ETF",
     "QQQ": "Nasdaq 100 · Invesco ETF",
     "DIA": "Dow Jones · SPDR ETF",
-    "IWM": "Russell 2000 · iShares ETF"
+    "IWM": "Russell 2000 · iShares ETF",
+    "VIX": "Index volatility VIX · „index strachu“",
+    "VIXY": "VIX futures · ProShares ETF"
   }
 }

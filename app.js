@@ -45,7 +45,7 @@
   $$('[data-jump]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.jump)));
   $('#backBtn').addEventListener('click',()=>setView('overview'));
 
-  function saveWatch(){ state.watch=[...new Set(state.watch)]; STORE.set('mt_watch_v2',state.watch); renderWatch(); renderStocks(); }
+  function saveWatch(){ state.watch=[...new Set(state.watch)]; STORE.set('mt_watch_v2',state.watch); renderWatch(); renderStocks(); renderMetrics(); }
   function toggleWatch(ticker){ ticker=ticker.toUpperCase(); const i=state.watch.indexOf(ticker); if(i>=0){state.watch.splice(i,1);toast(`${ticker} odebrána ze sledovaných`);}else{state.watch.push(ticker);toast(`${ticker} přidána do sledovaných`);} saveWatch(); if(state.selected===ticker) renderDetailWatch(); }
   function renderWatch(){
     const box=$('#watchlist'); if(!state.watch.length){box.innerHTML='<div class="empty-state">Watchlist je prázdný.</div>';return;}
@@ -75,8 +75,8 @@
     const active=[...rows].sort((a,b)=>(b.volume||0)-(a.volume||0))[0];
     const unusual=[...rows].sort((a,b)=>(b.rel_volume||0)-(a.rel_volume||0))[0];
     const mover=[...rows].sort((a,b)=>Math.abs(b.change||0)-Math.abs(a.change||0))[0];
-    const buys=rows.reduce((n,s)=>n+(s.insider_buys||0),0);
-    $('#marketMetrics').innerHTML=`<article class="metric-card"><span>Nejvyšší objem</span><strong>${esc(active.ticker)}</strong><small>${compact(active.volume)} akcií</small></article><article class="metric-card"><span>Neobvyklý objem</span><strong>${esc(unusual.ticker)}</strong><small>${rel(unusual.rel_volume)} běžného objemu</small></article><article class="metric-card"><span>Největší pohyb</span><strong>${esc(mover.ticker)}</strong><small class="${cls(mover.change)}">${pct(mover.change)}</small></article><article class="metric-card"><span>Insider nákupy</span><strong>${buys}</strong><small>u sledovaných titulů</small></article>`;
+    const wset=new Set(state.watch),wrows=rows.filter(s=>wset.has(s.ticker)),buys=(wset.size?wrows:rows).reduce((n,s)=>n+(s.insider_buys||0),0),buysLabel=wset.size?'u sledovaných titulů':`u všech ${rows.length} titulů v přehledu`;
+    $('#marketMetrics').innerHTML=`<article class="metric-card"><span>Nejvyšší objem</span><strong>${esc(active.ticker)}</strong><small>${compact(active.volume)} akcií</small></article><article class="metric-card"><span>Neobvyklý objem</span><strong>${esc(unusual.ticker)}</strong><small>${rel(unusual.rel_volume)} běžného objemu</small></article><article class="metric-card"><span>Největší pohyb</span><strong>${esc(mover.ticker)}</strong><small class="${cls(mover.change)}">${pct(mover.change)}</small></article><article class="metric-card"><span>Insider nákupy</span><strong>${buys}</strong><small>${buysLabel}</small></article>`;
   }
   function filteredStocks(){
     const q=$('#stockSearch').value.trim().toLowerCase(), f=$('#stockFilter').value, sort=$('#stockSort').value;
