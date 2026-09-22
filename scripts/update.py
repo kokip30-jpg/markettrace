@@ -5,6 +5,7 @@ Spouští se v GitHub Actions. Používá jen standardní knihovnu Pythonu.
 """
 import gzip
 import json
+import math
 import os
 import re
 import sys
@@ -38,7 +39,7 @@ def time_left():
 # ---------------------------------------------------------------- HTTP
 _last_sec = [0.0]
 DEBUG = {'errors': [], 'probe': []}
-UA_CANDIDATES = [UA, 'MarketTrace markettrace@users.noreply.github.com']
+UA_CANDIDATES = [UA, 'Pavel admin@masaze-tisnov.cz', 'MarketTrace admin@masaze-tisnov.cz']
 
 
 def note_error(url, code, body=b''):
@@ -57,9 +58,7 @@ def probe_sec():
     global UA
     for ua in UA_CANDIDATES:
         try:
-            # data.sec.gov bývá z GitHub runnerů dostupné i v době, kdy
-            # www.sec.gov blokuje obecnou kontrolní adresu.
-            req = urllib.request.Request('https://data.sec.gov/submissions/CIK0000320193.json',
+            req = urllib.request.Request('https://www.sec.gov/files/company_tickers.json',
                                          headers={'User-Agent': ua, 'Accept-Encoding': 'gzip, deflate'})
             with urllib.request.urlopen(req, timeout=30) as r:
                 DEBUG['probe'].append({'ua': ua, 'code': r.status})
@@ -437,355 +436,6 @@ def update_ticker(sym, tmap):
     return True
 
 
-# ---------------------------------------------------------------- fundamenty + udalosti 8-K
-DURATION_FACTS = {
-    'revenue': ('RevenueFromContractWithCustomerExcludingAssessedTax', 'Revenues',
-                'SalesRevenueNet', 'SalesRevenueGoodsNet'),
-    'net_income': ('NetIncomeLoss', 'ProfitLoss'),
-    'operating_income': ('OperatingIncomeLoss',),
-    'operating_cash': ('NetCashProvidedByUsedInOperatingActivities',
-                       'NetCashProvidedByUsedInOperatingActivitiesContinuingOperations'),
-    'capex': ('PaymentsToAcquirePropertyPlantAndEquipment',
-              'PaymentsForAdditionsToPropertyPlantAndEquipment'),
-    'eps_diluted': ('EarningsPerShareDiluted',),
-}
-INSTANT_FACTS = {
-    'cash': ('CashAndCashEquivalentsAtCarryingValue',
-             'CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents'),
-    'assets': ('Assets',),
-    'liabilities': ('Liabilities',),
-    'equity': ('StockholdersEquity', 'StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest'),
-    'shares': ('EntityCommonStockSharesOutstanding', 'CommonStockSharesOutstanding'),
-    'debt_current': ('LongTermDebtCurrent', 'ShortTermBorrowings'),
-    'debt_long': ('LongTermDebtNoncurrent', 'LongTermDebt'),
-}
-EVENT_LABELS = {
-    '1.01': 'Významná smlouva', '1.02': 'Ukončení významné smlouvy', '1.03': 'Úpadek nebo nucená správa',
-    '2.01': 'Akvizice nebo prodej aktiv', '2.02': 'Výsledky a finanční situace',
-    '2.03': 'Nový významný dluh', '2.04': 'Urychlení nebo zesplatnění závazku',
-    '2.05': 'Náklady na restrukturalizaci', '2.06': 'Významné snížení hodnoty aktiv',
-    '3.01': 'Oznámení burzy nebo vyřazení', '3.02': 'Neregistrovaný prodej akcií',
-    '3.03': 'Změna práv držitelů akcií', '4.01': 'Změna auditora', '4.02': 'Účetní závěrka již není spolehlivá',
-    '5.01': 'Změna kontroly společnosti', '5.02': 'Změna vedení nebo představenstva',
-    '5.03': 'Změna stanov', '5.07': 'Výsledky hlasování akcionářů',
-    '7.01': 'Regulation FD – nové veřejné sdělení', '8.01': 'Jiná významná událost',
-    '9.01': 'Finanční výkazy a přílohy',
-}
-
-
-def fact_units(companyfacts, concepts):
-    schemas = companyfacts.get('facts') or {}
-    for schema in ('us-gaap', 'dei'):
-        facts = schemas.get(schema) or {}
-        for concept in concepts:
-            units = (facts.get(concept) or {}).get('units') or {}
-            for unit in ('USD', 'USD/shares', 'shares'):
-                if units.get(unit):
-                    return units[unit], concept, unit
-    return [], None, None
-
-
-def duration_series(companyfacts, concepts):
-    rows, concept, unit = fact_units(companyfacts, concepts)
-    picked = {}
-    for r in rows:
-        if r.get('form') not in ('10-Q', '10-K') or not r.get('start') or not r.get('end'):
-            continue
-        try:
-            days = (datetime.fromisoformat(r['end']) - datetime.fromisoformat(r['start'])).days
-        except ValueError:
-            continue
-        annual = r.get('form') == '10-K' and 300 <= days <= 390
-        quarter = r.get('form') in ('10-Q', '10-K') and 70 <= days <= 120
-        if not (annual or quarter):
-            continue
-        kind = 'annual' if annual else 'quarterly'
-        key = (kind, r['end'])
-        if key not in picked or (r.get('filed') or '') > (picked[key].get('filed') or ''):
-            picked[key] = r
-    out = {'annual': [], 'quarterly': [], 'concept': concept, 'unit': unit}
-    for (kind, _), r in sorted(picked.items(), key=lambda x: x[0][1]):
-        out[kind].append(clean({'start': r.get('start'), 'end': r.get('end'), 'filed': r.get('filed'), 'fy': r.get('fy'),
-                                'fp': r.get('fp'), 'value': r.get('val')}))
-    # Mnoho emitentů v XBRL neposílá samostatné Q4. Dopočítáme ho jako
-    # celý fiskální rok minus první tři samostatná čtvrtletí.
-    quarter_ends = {r.get('end') for r in out['quarterly']}
-    for annual_row in out['annual']:
-        start, end = annual_row.get('start'), annual_row.get('end')
-        if not start or not end or end in quarter_ends or not isinstance(annual_row.get('value'), (int, float)):
-            continue
-        within = [r for r in out['quarterly'] if start <= (r.get('end') or '') < end and isinstance(r.get('value'), (int, float))]
-        within = sorted(within, key=lambda r: r['end'])[-3:]
-        if len(within) == 3:
-            out['quarterly'].append({'start': within[-1]['end'], 'end': end, 'filed': annual_row.get('filed'),
-                                      'fy': annual_row.get('fy'), 'fp': 'Q4',
-                                      'value': annual_row['value'] - sum(r['value'] for r in within), 'derived': True})
-            quarter_ends.add(end)
-    out['quarterly'].sort(key=lambda r: r.get('end') or '')
-    out['annual'] = out['annual'][-6:]
-    out['quarterly'] = out['quarterly'][-8:]
-    return out
-
-
-def instant_latest(companyfacts, concepts):
-    rows, concept, unit = fact_units(companyfacts, concepts)
-    valid = [r for r in rows if r.get('form') in ('10-Q', '10-K', '10-K/A', '10-Q/A') and r.get('end')]
-    if not valid:
-        return None
-    r = max(valid, key=lambda x: (x.get('end') or '', x.get('filed') or ''))
-    return clean({'end': r.get('end'), 'filed': r.get('filed'), 'value': r.get('val'),
-                  'concept': concept, 'unit': unit})
-
-
-def last_value(series, kind='quarterly'):
-    rows = (series or {}).get(kind) or []
-    return rows[-1].get('value') if rows else None
-
-
-def trailing(series):
-    rows = (series or {}).get('quarterly') or []
-    vals = [r.get('value') for r in rows[-4:] if isinstance(r.get('value'), (int, float))]
-    return sum(vals) if len(vals) == 4 else None
-
-
-def safe_div(a, b):
-    return a / b if isinstance(a, (int, float)) and isinstance(b, (int, float)) and b else None
-
-
-def filing_events(sub, cik):
-    rec = (sub.get('filings') or {}).get('recent') or {}
-    keys = ('accessionNumber', 'form', 'filingDate', 'reportDate', 'primaryDocument', 'items')
-    cols = {k: rec.get(k) or [] for k in keys}
-    size = len(cols['accessionNumber'])
-    events = []
-    for i in range(size):
-        if i >= len(cols['form']) or cols['form'][i] not in ('8-K', '8-K/A'):
-            continue
-        filed = cols['filingDate'][i] if i < len(cols['filingDate']) else None
-        if filed and filed < (TODAY - timedelta(days=550)).isoformat():
-            continue
-        acc = cols['accessionNumber'][i]
-        raw_items = cols['items'][i] if i < len(cols['items']) else ''
-        items = re.findall(r'\d\.\d{2}', raw_items or '')
-        labels = []
-        for item in items:
-            label = EVENT_LABELS.get(item)
-            if label and label not in labels:
-                labels.append(label)
-        primary = cols['primaryDocument'][i] if i < len(cols['primaryDocument']) else ''
-        url = f'{acc_folder(cik, acc)}/{primary}' if primary else index_url(cik, acc)
-        events.append(clean({'filed': filed, 'report': cols['reportDate'][i] if i < len(cols['reportDate']) else None,
-                             'form': cols['form'][i], 'items': items, 'labels': labels,
-                             'title': labels[0] if labels else 'Významná firemní událost', 'url': url}))
-        if len(events) >= 18:
-            break
-    return events
-
-
-def update_fundamentals(sym, tmap, price=None):
-    if sym not in tmap:
-        return False
-    cik, title = tmap[sym]
-    sub = get_json(f'https://data.sec.gov/submissions/CIK{int(cik):010d}.json')
-    facts = get_json(f'https://data.sec.gov/api/xbrl/companyfacts/CIK{int(cik):010d}.json')
-    if not sub or not facts:
-        return False
-    series = {name: duration_series(facts, concepts) for name, concepts in DURATION_FACTS.items()}
-    instant = {name: instant_latest(facts, concepts) for name, concepts in INSTANT_FACTS.items()}
-    revenue_ttm, income_ttm = trailing(series['revenue']), trailing(series['net_income'])
-    op_income_ttm, cfo_ttm, capex_ttm = trailing(series['operating_income']), trailing(series['operating_cash']), trailing(series['capex'])
-    eps_ttm = trailing(series['eps_diluted'])
-    shares = (instant.get('shares') or {}).get('value')
-    market_cap = price * shares if isinstance(price, (int, float)) and isinstance(shares, (int, float)) else None
-    fcf_ttm = cfo_ttm - capex_ttm if isinstance(cfo_ttm, (int, float)) and isinstance(capex_ttm, (int, float)) else None
-    debt = sum((instant.get(k) or {}).get('value') or 0 for k in ('debt_current', 'debt_long')) or None
-    cash = (instant.get('cash') or {}).get('value')
-    equity = (instant.get('equity') or {}).get('value')
-    qrev = series['revenue']['quarterly']
-    rev_growth = safe_div(qrev[-1]['value'], qrev[-5]['value']) - 1 if len(qrev) >= 5 and qrev[-5].get('value') else None
-    valuation = clean({
-        'price': price, 'market_cap': market_cap, 'pe_ttm': safe_div(price, eps_ttm),
-        'ps_ttm': safe_div(market_cap, revenue_ttm), 'fcf_yield': safe_div(fcf_ttm, market_cap),
-        'net_margin': safe_div(income_ttm, revenue_ttm), 'operating_margin': safe_div(op_income_ttm, revenue_ttm),
-        'roe': safe_div(income_ttm, equity), 'revenue_growth_yoy': rev_growth,
-        'net_debt': debt - cash if isinstance(debt, (int, float)) and isinstance(cash, (int, float)) else None,
-    })
-    save(f'fundamentals/{sym}.json', {
-        'ticker': sym, 'name': sub.get('name') or title, 'cik': cik, 'updated': NOW.isoformat(),
-        'series': series, 'instant': instant, 'ttm': clean({'revenue': revenue_ttm, 'net_income': income_ttm,
-            'operating_income': op_income_ttm, 'operating_cash': cfo_ttm, 'capex': capex_ttm,
-            'free_cash_flow': fcf_ttm, 'eps_diluted': eps_ttm}),
-        'valuation': valuation, 'events': filing_events(sub, cik),
-        'source': 'SEC EDGAR XBRL',
-    })
-    log('fundamenty', sym, 'událostí 8-K:', len(filing_events(sub, cik)))
-    return True
-
-
-def nasdaq_json(path):
-    return get_json('https://api.nasdaq.com/api/' + path)
-
-
-def nasdaq_number(value, thousands=False):
-    s = str(value or '').strip().replace('$', '').replace(',', '').replace('%', '')
-    if not s or s in ('--', 'N/A'):
-        return None
-    negative = s.startswith('(') and s.endswith(')')
-    s = s.strip('()')
-    mult = 1
-    if s[-1:].upper() in ('K', 'M', 'B', 'T'):
-        mult = {'K': 1e3, 'M': 1e6, 'B': 1e9, 'T': 1e12}[s[-1].upper()]
-        s = s[:-1]
-    try:
-        n = float(s) * mult * (1000 if thousands and mult == 1 else 1)
-        return -n if negative else n
-    except ValueError:
-        return None
-
-
-def nasdaq_table(doc, table_name, thousands=True):
-    table = ((doc or {}).get('data') or {}).get(table_name) or {}
-    headers, rows = table.get('headers') or {}, table.get('rows') or []
-    by_name = {str(r.get('value1') or '').strip().lower(): r for r in rows}
-    periods = []
-    for key in ('value2', 'value3', 'value4', 'value5'):
-        raw_date = headers.get(key)
-        if not raw_date:
-            continue
-        try:
-            end = datetime.strptime(raw_date, '%m/%d/%Y').date().isoformat()
-        except ValueError:
-            end = raw_date
-        periods.append((key, end))
-    def values(*labels, absolute=False):
-        row = next((by_name.get(label.lower()) for label in labels if by_name.get(label.lower())), None)
-        out = []
-        for key, end in periods:
-            val = nasdaq_number((row or {}).get(key), thousands)
-            if absolute and isinstance(val, (int, float)):
-                val = abs(val)
-            if val is not None:
-                out.append({'end': end, 'value': val})
-        return sorted(out, key=lambda r: r['end'])
-    return values
-
-
-def nasdaq_events(sym, headers):
-    b = http(f'https://api.nasdaq.com/api/company/{urllib.parse.quote(sym)}/sec-filings?limit=40&sortColumn=filed&sortOrder=desc',
-             headers=headers)
-    try:
-        data = (json.loads(b) if b else {}).get('data') or {}
-    except ValueError:
-        return []
-    rows = data.get('rows') or (data.get('filings') or {}).get('rows') or []
-    events = []
-    for row in rows:
-        form = str(row.get('formType') or row.get('form') or row.get('type') or '')
-        if not form.upper().startswith('8-K'):
-            continue
-        description = str(row.get('description') or row.get('title') or '')
-        low = description.lower()
-        if any(k in low for k in ('result', 'financial', 'earnings')):
-            title = 'Výsledky a finanční situace'
-        elif any(k in low for k in ('director', 'officer', 'management')):
-            title = 'Změna vedení nebo představenstva'
-        elif any(k in low for k in ('acquisition', 'merger', 'asset')):
-            title = 'Akvizice nebo prodej aktiv'
-        elif any(k in low for k in ('agreement', 'contract')):
-            title = 'Významná smlouva'
-        else:
-            title = 'Významná firemní událost'
-        view = row.get('view') or row.get('url') or row.get('link')
-        if isinstance(view, dict):
-            view = view.get('html') or view.get('value') or next(iter(view.values()), None)
-        events.append(clean({'filed': row.get('filed') or row.get('filingDate') or row.get('date'),
-                             'form': form, 'title': title, 'labels': [description] if description else [],
-                             'url': view}))
-        if len(events) >= 18:
-            break
-    return events
-
-
-def update_fundamentals_nasdaq(sym, price=None):
-    headers = {'Accept': 'application/json, text/plain, */*', 'Origin': 'https://www.nasdaq.com',
-               'Referer': f'https://www.nasdaq.com/market-activity/stocks/{sym.lower()}/financials',
-               'User-Agent': 'Mozilla/5.0 (compatible; MarketTrace/1.0)'}
-    def fetch(frequency):
-        b = http(f'https://api.nasdaq.com/api/company/{urllib.parse.quote(sym)}/financials?frequency={frequency}', headers=headers)
-        try:
-            return json.loads(b) if b else None
-        except ValueError:
-            return None
-    annual_doc, quarterly_doc = fetch(1), fetch(2)
-    if not annual_doc and not quarterly_doc:
-        return False
-    annual_income = nasdaq_table(annual_doc, 'incomeStatementTable')
-    quarterly_income = nasdaq_table(quarterly_doc, 'incomeStatementTable')
-    annual_cash = nasdaq_table(annual_doc, 'cashFlowTable')
-    quarterly_cash = nasdaq_table(quarterly_doc, 'cashFlowTable')
-    annual_balance = nasdaq_table(annual_doc, 'balanceSheetTable')
-    quarterly_balance = nasdaq_table(quarterly_doc, 'balanceSheetTable')
-    def series(a, q):
-        return {'annual': a[-6:], 'quarterly': q[-8:]}
-    revenue = series(annual_income('Total Revenue'), quarterly_income('Total Revenue'))
-    net_income = series(annual_income('Net Income'), quarterly_income('Net Income'))
-    operating_income = series(annual_income('Operating Income'), quarterly_income('Operating Income'))
-    operating_cash = series(annual_cash('Net Cash Flow-Operating'), quarterly_cash('Net Cash Flow-Operating'))
-    capex = series(annual_cash('Capital Expenditures', absolute=True), quarterly_cash('Capital Expenditures', absolute=True))
-    def latest(values):
-        rows = values or []
-        return {'end': rows[-1]['end'], 'value': rows[-1]['value']} if rows else None
-    cash_rows = quarterly_balance('Cash and Cash Equivalents') or annual_balance('Cash and Cash Equivalents')
-    assets_rows = quarterly_balance('Total Assets') or annual_balance('Total Assets')
-    liabilities_rows = quarterly_balance('Total Liabilities') or annual_balance('Total Liabilities')
-    equity_rows = quarterly_balance('Total Equity') or annual_balance('Total Equity')
-    short_rows = quarterly_balance('Short-Term Debt / Current Portion of Long-Term Debt') or annual_balance('Short-Term Debt / Current Portion of Long-Term Debt')
-    long_rows = quarterly_balance('Long-Term Debt') or annual_balance('Long-Term Debt')
-    summary_b = http(f'https://api.nasdaq.com/api/quote/{urllib.parse.quote(sym)}/summary?assetclass=stocks', headers=headers)
-    try:
-        summary = ((json.loads(summary_b) if summary_b else {}).get('data') or {}).get('summaryData') or {}
-    except ValueError:
-        summary = {}
-    market_cap = nasdaq_number((summary.get('MarketCap') or {}).get('value'))
-    pe_ratio = nasdaq_number((summary.get('PERatio') or {}).get('value'))
-    shares = market_cap / price if isinstance(market_cap, (int, float)) and isinstance(price, (int, float)) and price else None
-    instant = {'cash': latest(cash_rows), 'assets': latest(assets_rows), 'liabilities': latest(liabilities_rows),
-               'equity': latest(equity_rows), 'debt_current': latest(short_rows), 'debt_long': latest(long_rows)}
-    if shares:
-        instant['shares'] = {'end': TODAY.isoformat(), 'value': shares}
-    def ttm_or_annual(s):
-        vals = [r['value'] for r in s['quarterly'][-4:]]
-        return sum(vals) if len(vals) == 4 else (s['annual'][-1]['value'] if s['annual'] else None)
-    revenue_ttm, income_ttm = ttm_or_annual(revenue), ttm_or_annual(net_income)
-    op_ttm, cfo_ttm, capex_ttm = ttm_or_annual(operating_income), ttm_or_annual(operating_cash), ttm_or_annual(capex)
-    fcf_ttm = cfo_ttm - capex_ttm if isinstance(cfo_ttm, (int, float)) and isinstance(capex_ttm, (int, float)) else None
-    cash = (instant.get('cash') or {}).get('value')
-    debt = sum((instant.get(k) or {}).get('value') or 0 for k in ('debt_current', 'debt_long')) or None
-    equity = (instant.get('equity') or {}).get('value')
-    qrev = revenue['quarterly']
-    growth = qrev[-1]['value'] / qrev[-5]['value'] - 1 if len(qrev) >= 5 and qrev[-5]['value'] else None
-    eps_approx = income_ttm / shares if isinstance(income_ttm, (int, float)) and isinstance(shares, (int, float)) and shares else None
-    pe_ratio = pe_ratio or safe_div(market_cap, income_ttm)
-    save(f'fundamentals/{sym}.json', {
-        'ticker': sym, 'name': sym, 'updated': NOW.isoformat(),
-        'series': {'revenue': revenue, 'net_income': net_income, 'operating_income': operating_income,
-                   'operating_cash': operating_cash, 'capex': capex, 'eps_diluted': {'annual': [], 'quarterly': []}},
-        'instant': instant,
-        'ttm': clean({'revenue': revenue_ttm, 'net_income': income_ttm, 'operating_income': op_ttm,
-                      'operating_cash': cfo_ttm, 'capex': capex_ttm, 'free_cash_flow': fcf_ttm,
-                      'eps_diluted': eps_approx}),
-        'valuation': clean({'market_cap': market_cap, 'pe_ttm': pe_ratio,
-                            'ps_ttm': safe_div(market_cap, revenue_ttm), 'fcf_yield': safe_div(fcf_ttm, market_cap),
-                            'net_margin': safe_div(income_ttm, revenue_ttm),
-                            'operating_margin': safe_div(op_ttm, revenue_ttm), 'roe': safe_div(income_ttm, equity),
-                            'revenue_growth_yoy': growth,
-                            'net_debt': debt - cash if isinstance(debt, (int, float)) and isinstance(cash, (int, float)) else None}),
-        'events': nasdaq_events(sym, headers), 'source': 'Nasdaq / firemní výkazy',
-    })
-    log('fundamenty Nasdaq', sym)
-    return True
-
-
 # ---------------------------------------------------------------- guru (13F)
 STOP = set('INC INCORPORATED CORP CORPORATION CO COMPANY LTD LIMITED PLC HLDGS HOLDINGS HOLDING GROUP GRP '
            'CL CLASS A B C COM NEW DEL THE SA NV AG LP LLC SHS ORD ADR SPONSORED SPON DE TR TRUST'.split())
@@ -1156,10 +806,8 @@ def update_alpaca(meta, symbols):
     now = datetime.now(timezone.utc)
     end = now - timedelta(minutes=16)  # zdarma jen se zpožděním 15 minut
     today_ny = now.astimezone(NY).date()
-    missing_daily = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'bars', f'{sym}.json'))]
-    daily_targets = symbols if meta.get('bars_at', '')[:10] != today_ny.isoformat() else missing_daily
-    if daily_targets:
-        daily = alpaca_bars(daily_targets, '1Day', iso(now - timedelta(days=400)), iso(end))
+    if meta.get('bars_at', '')[:10] != today_ny.isoformat():
+        daily = alpaca_bars(symbols, '1Day', iso(now - timedelta(days=400)), iso(end))
         if daily is None:
             log('Alpaca: denní svíčky se nepodařilo stáhnout')
         else:
@@ -1169,38 +817,13 @@ def update_alpaca(meta, symbols):
             log('Alpaca: denní svíčky pro', len(daily), 'titulů')
     ext = load('ext.json', {}).get('sym', {})
     ny = now.astimezone(NY)
-    session_start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
-    # Nově přidaným titulům připravíme několik obchodních dnů historie,
-    # zatímco existující tituly stahují jen dnešní přírůstek.
-    missing_intraday = [sym for sym in symbols if not os.path.exists(os.path.join(DATA, 'intraday', f'{sym}.json'))]
-    current_symbols = [sym for sym in symbols if sym not in missing_intraday]
-    mins = {}
-    if ny.weekday() < 5 and end > session_start.astimezone(timezone.utc) and current_symbols:
-        mins.update(alpaca_bars(current_symbols, '1Min', iso(session_start), iso(end)) or {})
-    if missing_intraday:
-        backfill = alpaca_bars(missing_intraday, '1Min', iso(now - timedelta(days=8)), iso(end)) or {}
-        for sym, rows in backfill.items():
-            mins.setdefault(sym, []).extend(rows)
-    if mins:
+    start = ny.replace(hour=4, minute=0, second=0, microsecond=0)
+    if ny.weekday() < 5 and end > start.astimezone(timezone.utc):
+        mins = alpaca_bars(symbols, '1Min', iso(start), iso(end))
         for sym, bars in (mins or {}).items():
             if not bars:
                 continue
-            existing = load(f'intraday/{sym}.json', [])
-            merged = {str(row[0]): row for row in existing
-                      if isinstance(row, list) and len(row) >= 6}
-            for b in bars:
-                merged[b['t']] = [b['t'], b['o'], b['h'], b['l'], b['c'], b['v']]
-            cutoff = now - timedelta(days=10)
-            packed = [row for row in merged.values()
-                      if datetime.fromisoformat(str(row[0]).replace('Z', '+00:00')) >= cutoff]
-            packed.sort(key=lambda row: row[0])
-            save(f'intraday/{sym}.json', packed[-5000:])
-
-            today_bars = [b for b in bars
-                          if datetime.fromisoformat(b['t'].replace('Z', '+00:00')).astimezone(NY).date() == today_ny]
-            tagged = [(b, session_of(b['t'])) for b in today_bars]
-            if not tagged:
-                continue
+            tagged = [(b, session_of(b['t'])) for b in bars]
             last, sess = tagged[-1]
             same = [b for b, ss in tagged if ss == sess]
             daily = load(f'bars/{sym}.json', [])
@@ -1213,61 +836,127 @@ def update_alpaca(meta, symbols):
                 'h': max(b['h'] for b in same), 'l': min(b['l'] for b in same),
                 'v': sum(b['v'] for b in same),
             })
-        meta['intraday_at'] = iso(now)
-        log('Alpaca: minutové grafy a ceny pro', len(mins), 'titulů')
+        if mins:
+            log('Alpaca: ceny mimo hlavní seanci pro', len(mins), 'titulů')
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
-def build_market_snapshot(symbols):
-    """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
-    ext_doc = load('ext.json', {})
-    ext = ext_doc.get('sym', {})
-    names = load('tickers.json', {})
-    buys = load('feed-buys.json', [])
-    buy_counts = {}
-    for row in buys:
-        ticker = row.get('t')
-        if ticker:
-            buy_counts[ticker] = buy_counts.get(ticker, 0) + 1
+# ---------------------------------------------------------------- opce: krytý call
+def ncdf(x):
+    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
+
+
+def bs_call(S, K, T, r, v):
+    if v <= 0 or T <= 0:
+        return max(S - K, 0.0), 1.0 if S > K else 0.0
+    d1 = (math.log(S / K) + (r + v * v / 2) * T) / (v * math.sqrt(T))
+    d2 = d1 - v * math.sqrt(T)
+    return S * ncdf(d1) - K * math.exp(-r * T) * ncdf(d2), ncdf(d1)
+
+
+def implied_vol(price, S, K, T, r):
+    intrinsic = max(S - K * math.exp(-r * T), 0.0)
+    if price <= intrinsic + 1e-6:
+        return None
+    lo, hi = 0.01, 5.0
+    for _ in range(80):
+        mid = (lo + hi) / 2
+        if bs_call(S, K, T, r, mid)[0] > price:
+            hi = mid
+        else:
+            lo = mid
+    return (lo + hi) / 2
+
+
+def occ_parse(sym):
+    m = re.match(r'^([A-Z.]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$', sym)
+    if not m:
+        return None
+    return f'20{m.group(2)}-{m.group(3)}-{m.group(4)}', m.group(5), int(m.group(6)) / 1000
+
+
+def spot_price(sym):
+    e = load('ext.json', {}).get('sym', {}).get(sym)
+    bars = load(f'bars/{sym}.json', [])
+    last = bars[-1] if bars else None
+    if e and last and e.get('t', '')[:10] >= last[0]:
+        return e['p']
+    return last[4] if last else (e or {}).get('p')
+
+
+def update_options(meta, symbols):
+    if not (AK and AS):
+        return
+    if meta.get('options_at', '') > (NOW - timedelta(minutes=CFG.get('options_minutes', 15))).isoformat():
+        return
+    oc = CFG.get('options', {})
+    dmin, dmax, target = oc.get('dte_min', 21), oc.get('dte_max', 45), oc.get('dte_target', 30)
+    r = oc.get('rate', 0.04)
+    today = NOW.astimezone(NY).date()
     out = []
     for sym in symbols:
-        bars = load(f'bars/{sym}.json', [])
-        bars = [b for b in bars if isinstance(b, list) and len(b) >= 6]
-        current = ext.get(sym, {})
-        last = bars[-1] if bars else None
-        previous = bars[-2] if len(bars) > 1 else None
-        price = current.get('p') or (last[4] if last else None)
-        prev_close = current.get('pc') or (previous[4] if previous else None)
-        if price is None:
+        if not time_left():
+            break
+        S = spot_price(sym)
+        if not S:
             continue
-        completed_day = last if last and last[0] == datetime.now(NY).date().isoformat() else None
-        if current.get('s') == 'post' and completed_day:
-            day_high, day_low, volume = completed_day[2], completed_day[3], completed_day[5]
-        else:
-            day_high = current.get('h') or (last[2] if last else price)
-            day_low = current.get('l') or (last[3] if last else price)
-            volume = current.get('v') or (last[5] if last else 0)
-        history = bars[-252:]
-        completed = bars[-21:-1] if len(bars) > 1 else bars[-20:]
-        avg_volume = sum(b[5] or 0 for b in completed) / len(completed) if completed else None
-        name_data = names.get(sym) or []
-        name = name_data[1] if len(name_data) > 1 else sym
-        out.append(clean({
-            'ticker': sym, 'name': name, 'price': price, 'previous_close': prev_close,
-            'change': ((price - prev_close) / prev_close * 100) if prev_close else None,
-            'day_high': day_high, 'day_low': day_low, 'volume': volume,
-            'avg_volume': avg_volume, 'rel_volume': (volume / avg_volume) if avg_volume else None,
-            'year_high': max((b[2] for b in history), default=day_high),
-            'year_low': min((b[3] for b in history), default=day_low),
-            'insider_buys': buy_counts.get(sym, 0),
-            'timestamp': current.get('t') or (last[0] if last else None),
-        }))
-    out.sort(key=lambda row: row.get('volume') or 0, reverse=True)
-    save('market.json', {
-        'updated': ext_doc.get('updated') or NOW.isoformat(), 'delay': ext_doc.get('delay', 15),
-        'source': 'Alpaca + SEC EDGAR', 'symbols': out,
-    })
-    log('tržní snapshot:', len(out), 'titulů')
+        snaps, token = {}, None
+        for _ in range(6):
+            q = {'feed': 'indicative', 'type': 'call', 'limit': 1000,
+                 'expiration_date_gte': (today + timedelta(days=dmin)).isoformat(),
+                 'expiration_date_lte': (today + timedelta(days=dmax)).isoformat(),
+                 'strike_price_gte': round(S * 0.97, 2), 'strike_price_lte': round(S * 1.3, 2)}
+            if token:
+                q['page_token'] = token
+            b = http(f'https://data.alpaca.markets/v1beta1/options/snapshots/{sym}?' + urllib.parse.urlencode(q),
+                     headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS, 'Accept': 'application/json'})
+            if not b:
+                break
+            j = json.loads(b)
+            snaps.update(j.get('snapshots') or {})
+            token = j.get('next_page_token')
+            if not token:
+                break
+        by_exp = {}
+        for osym, sn in snaps.items():
+            parsed = occ_parse(osym)
+            if not parsed or parsed[1] != 'C':
+                continue
+            exp, _, K = parsed
+            if not (S * 0.97 <= K <= S * 1.3):
+                continue
+            qt = sn.get('latestQuote') or {}
+            bid, ask = qt.get('bp') or 0, qt.get('ap') or 0
+            if bid <= 0 or ask <= 0 or ask < bid:
+                continue
+            by_exp.setdefault(exp, []).append((K, bid, ask, sn.get('greeks') or {}, sn.get('impliedVolatility')))
+        if not by_exp:
+            continue
+        exp = min(by_exp, key=lambda e: (abs((datetime.fromisoformat(e).date() - today).days - target), e))
+        dte = (datetime.fromisoformat(exp).date() - today).days
+        T = max(dte, 1) / 365
+        chain = []
+        for K, bid, ask, gk, iv in sorted(by_exp[exp]):
+            mid = (bid + ask) / 2
+            iv = iv or implied_vol(mid, S, K, T, r)
+            delta = gk.get('delta')
+            if delta is None and iv:
+                delta = bs_call(S, K, T, r, iv)[1]
+            if delta is None:
+                continue
+            chain.append({
+                'k': K, 'b': bid, 'a': ask, 'm': round(mid, 3), 'd': round(delta, 3),
+                'iv': round(iv * 100, 1) if iv else None,
+                'y': round(bid / S * 100, 2), 'ay': round(bid / S * 365 / max(dte, 1) * 100, 1),
+                'up': round((K - S) / S * 100, 2), 'mx': round((K - S + bid) / S * 100, 2),
+                'sp': round((ask - bid) / mid * 100, 1) if mid else None,
+            })
+        if chain:
+            out.append({'t': sym, 's': round(S, 2), 'exp': exp, 'dte': dte, 'c': chain})
+    if out:
+        save('options.json', {'updated': iso(NOW), 'rows': out})
+        meta['options_at'] = NOW.isoformat()
+        log('opce: krytý call pro', len(out), 'titulů')
 
 
 # ---------------------------------------------------------------- kurz ČNB
@@ -1501,9 +1190,8 @@ def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
     tickers = [t.upper() for t in CFG.get('tickers', [])]
-    market_symbols = list(dict.fromkeys(tickers + [t.upper() for t in CFG.get('market_symbols', [])]))
 
-    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_market_snapshot(market_symbols), lambda: update_fx(meta)):
+    for step in (lambda: update_alpaca(meta, tickers), lambda: update_options(meta, tickers), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:
@@ -1511,49 +1199,19 @@ def main():
 
     if meta.get('feed', {}).get('buys', 0) == 0 and meta.get('feed', {}).get('sells', 0) == 0:
         meta.pop('backfilled', None)  # historie se zatím nestáhla
-    sec_ok = probe_sec()
-    if not sec_ok:
+    if not probe_sec():
         log('SEC odmítá dotazy:', DEBUG['probe'])
         meta['error'] = 'SEC odmítá dotazy'
-    else:
-        meta.pop('error', None)
-    tmap = ticker_map(meta) if sec_ok else load('tickers.json', {})
-    rev = {}
-    for t, (cik, _) in tmap.items():
-        rev.setdefault(str(int(cik)), t)
-    log('tickerů v SEC:', len(tmap))
-
-    # Výkazy a 8-K stačí obnovit jednou denně. Tržní cena se do ocenění
-    # propíše při tomto denním snapshotu; návštěvník žádný klíč nepotřebuje.
-    missing_fundamentals = [sym for sym in tickers
-                            if not os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json'))]
-    if (meta.get('fundamentals_at', '')[:10] != TODAY.isoformat()
-            or meta.get('fundamentals_schema') != 2 or missing_fundamentals):
-        market_prices = {r.get('ticker'): r.get('price') for r in load('market.json', {}).get('symbols', [])}
-        fundamental_ok = 0
-        targets = tickers if meta.get('fundamentals_at', '')[:10] != TODAY.isoformat() else (missing_fundamentals or tickers)
-        for sym in targets:
-            if not time_left():
-                break
-            try:
-                got_fundamentals = update_fundamentals(sym, tmap, market_prices.get(sym)) if sec_ok else False
-                if not got_fundamentals:
-                    got_fundamentals = update_fundamentals_nasdaq(sym, market_prices.get(sym))
-                fundamental_ok += bool(got_fundamentals)
-            except Exception as e:
-                log('CHYBA fundamenty', sym, repr(e))
-        if fundamental_ok:
-            meta['fundamentals_at'] = NOW.isoformat()
-            meta['fundamentals_count'] = fundamental_ok
-            meta['fundamentals_schema'] = 2
-
-    # Zbytek sběru (Form 4, 8-K, 13F) vyžaduje SEC. Když SEC blokuje
-    # GitHub runner, zachováme starší SEC data, ale fundamenty z Nasdaq už jsou uložené.
-    if not sec_ok:
         meta['updated'] = datetime.now(timezone.utc).isoformat()
         save('meta.json', meta)
         save('debug.json', DEBUG)
         return
+    meta.pop('error', None)
+    tmap = ticker_map(meta)
+    rev = {}
+    for t, (cik, _) in tmap.items():
+        rev.setdefault(str(int(cik)), t)
+    log('tickerů v SEC:', len(tmap))
 
     try:
         update_feed(meta)
@@ -1599,10 +1257,6 @@ def main():
         notify(meta, got.get('update_144'), got.get('update_13d'), gurus_before, gurus_now)
     except Exception as e:
         log('CHYBA upozornění:', repr(e))
-    try:
-        build_market_snapshot(market_symbols)
-    except Exception as e:
-        log('CHYBA tržní snapshot:', repr(e))
     meta['alpaca'] = bool(AK and AS)
     meta['notify'] = bool(TOPIC)
     meta['updated'] = datetime.now(timezone.utc).isoformat()
