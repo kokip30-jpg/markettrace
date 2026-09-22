@@ -245,8 +245,7 @@
     $('#portfolioDate').value=new Date().toISOString().slice(0,10);renderWatch();
     try{const m=await data('market.json',true);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?'Poslední dostupná data':'Data připojena';$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderWatch();renderPulse();renderMetrics();renderStocks();renderHighlights();renderPortfolio();
     }catch(e){$('#feedStatus').className='feed-status error';$('#feedStatus b').textContent='Data nejsou dostupná';$('#stockRows').innerHTML='<tr><td colspan="8"><div class="empty-state">Tržní snapshot se právě připravuje. Zkus stránku obnovit za několik minut.</div></td></tr>';console.error(e);}
-    const h=decodeURIComponent(location.hash.slice(1)),route=h.toLowerCase();if(!route||route==='prehled'||route==='overview')setView('overview');else if(['insiders','gurus','compare','portfolio','options'].includes(route))setView(route);else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h.toUpperCase()))openDetail(h.toUpperCase());
+    const h=decodeURIComponent(location.hash.slice(1)),route=h.toLowerCase();if(!route||route==='prehled'||route==='overview')setView('overview');else if(['insiders','gurus','compare','portfolio'].includes(route))setView(route);else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h.toUpperCase()))openDetail(h.toUpperCase());
   }
-  window.MT = {setView, openDetail};
   boot();
 })();

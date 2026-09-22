@@ -5,7 +5,6 @@ Spouští se v GitHub Actions. Používá jen standardní knihovnu Pythonu.
 """
 import gzip
 import json
-import math
 import os
 import re
 import sys
@@ -1219,125 +1218,6 @@ def update_alpaca(meta, symbols):
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
-# ---------------------------------------------------------------- opce: krytý call
-def ncdf(x):
-    return 0.5 * (1 + math.erf(x / math.sqrt(2)))
-
-
-def bs_call(S, K, T, r, v):
-    if v <= 0 or T <= 0:
-        return max(S - K, 0.0), 1.0 if S > K else 0.0
-    d1 = (math.log(S / K) + (r + v * v / 2) * T) / (v * math.sqrt(T))
-    d2 = d1 - v * math.sqrt(T)
-    return S * ncdf(d1) - K * math.exp(-r * T) * ncdf(d2), ncdf(d1)
-
-
-def implied_vol(price, S, K, T, r):
-    intrinsic = max(S - K * math.exp(-r * T), 0.0)
-    if price <= intrinsic + 1e-6:
-        return None
-    lo, hi = 0.01, 5.0
-    for _ in range(80):
-        mid = (lo + hi) / 2
-        if bs_call(S, K, T, r, mid)[0] > price:
-            hi = mid
-        else:
-            lo = mid
-    return (lo + hi) / 2
-
-
-def occ_parse(sym):
-    m = re.match(r'^([A-Z.]+)(\d{2})(\d{2})(\d{2})([CP])(\d{8})$', sym)
-    if not m:
-        return None
-    return f'20{m.group(2)}-{m.group(3)}-{m.group(4)}', m.group(5), int(m.group(6)) / 1000
-
-
-def spot_price(sym):
-    e = load('ext.json', {}).get('sym', {}).get(sym)
-    bars = load(f'bars/{sym}.json', [])
-    last = bars[-1] if bars else None
-    if e and last and e.get('t', '')[:10] >= last[0]:
-        return e['p']
-    return last[4] if last else (e or {}).get('p')
-
-
-def update_options(meta, symbols):
-    if not (AK and AS):
-        return
-    if meta.get('options_at', '') > (NOW - timedelta(minutes=CFG.get('options_minutes', 15))).isoformat():
-        return
-    oc = CFG.get('options', {})
-    dmin, dmax, target = oc.get('dte_min', 21), oc.get('dte_max', 45), oc.get('dte_target', 30)
-    r = oc.get('rate', 0.04)
-    today = NOW.astimezone(NY).date()
-    out = []
-    for sym in symbols:
-        if not time_left():
-            break
-        S = spot_price(sym)
-        if not S:
-            continue
-        snaps, token = {}, None
-        for _ in range(6):
-            q = {'feed': 'indicative', 'type': 'call', 'limit': 1000,
-                 'expiration_date_gte': (today + timedelta(days=dmin)).isoformat(),
-                 'expiration_date_lte': (today + timedelta(days=dmax)).isoformat(),
-                 'strike_price_gte': round(S * 0.97, 2), 'strike_price_lte': round(S * 1.3, 2)}
-            if token:
-                q['page_token'] = token
-            b = http(f'https://data.alpaca.markets/v1beta1/options/snapshots/{sym}?' + urllib.parse.urlencode(q),
-                     headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS, 'Accept': 'application/json'})
-            if not b:
-                break
-            j = json.loads(b)
-            snaps.update(j.get('snapshots') or {})
-            token = j.get('next_page_token')
-            if not token:
-                break
-        by_exp = {}
-        for osym, sn in snaps.items():
-            parsed = occ_parse(osym)
-            if not parsed or parsed[1] != 'C':
-                continue
-            exp, _, K = parsed
-            if not (S * 0.97 <= K <= S * 1.3):
-                continue
-            qt = sn.get('latestQuote') or {}
-            bid, ask = qt.get('bp') or 0, qt.get('ap') or 0
-            if bid <= 0 or ask <= 0 or ask < bid:
-                continue
-            by_exp.setdefault(exp, []).append((K, bid, ask, sn.get('greeks') or {}, sn.get('impliedVolatility')))
-        if not by_exp:
-            continue
-        exp = min(by_exp, key=lambda e: (abs((datetime.fromisoformat(e).date() - today).days - target), e))
-        dte = (datetime.fromisoformat(exp).date() - today).days
-        T = max(dte, 1) / 365
-        chain = []
-        for K, bid, ask, gk, iv in sorted(by_exp[exp]):
-            mid = (bid + ask) / 2
-            iv = iv or implied_vol(mid, S, K, T, r)
-            delta = gk.get('delta')
-            if delta is None and iv:
-                delta = bs_call(S, K, T, r, iv)[1]
-            if delta is None:
-                continue
-            chain.append({
-                'k': K, 'b': bid, 'a': ask, 'm': round(mid, 3), 'd': round(delta, 3),
-                'iv': round(iv * 100, 1) if iv else None,
-                'y': round(bid / S * 100, 2), 'ay': round(bid / S * 365 / max(dte, 1) * 100, 1),
-                'up': round((K - S) / S * 100, 2), 'mx': round((K - S + bid) / S * 100, 2),
-                'sp': round((ask - bid) / mid * 100, 1) if mid else None,
-            })
-        if chain:
-            out.append({'t': sym, 's': round(S, 2), 'exp': exp, 'dte': dte, 'c': chain})
-    if out:
-        save('options.json', {'updated': iso(NOW), 'rows': out})
-        meta['options_at'] = NOW.isoformat()
-        log('opce: krytý call pro', len(out), 'titulů')
-
-
-
 def build_market_snapshot(symbols):
     """Připraví jeden veřejný snapshot pro web bez klientského API klíče."""
     ext_doc = load('ext.json', {})
@@ -1623,8 +1503,7 @@ def main():
     tickers = [t.upper() for t in CFG.get('tickers', [])]
     market_symbols = list(dict.fromkeys(tickers + [t.upper() for t in CFG.get('market_symbols', [])]))
 
-    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_market_snapshot(market_symbols),
-                 lambda: update_options(meta, market_symbols), lambda: update_fx(meta)):
+    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_market_snapshot(market_symbols), lambda: update_fx(meta)):
         try:
             step()
         except Exception as e:
