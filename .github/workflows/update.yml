@@ -3,7 +3,7 @@ name: Data SEC a nasazení webu
 on:
   schedule:
     - cron: '*/5 * * * 1-5'     # rychlé ceny a grafy každých 5 minut
-    - cron: '27 */2 * * * 1-5'  # SEC, 13F a fundamenty každé 2 hodiny
+    - cron: '27 */2 * * 1-5'    # SEC, 13F a fundamenty každé 2 hodiny
     - cron: '27 */4 * * 0,6'    # o víkendu plná aktualizace každé 4 hodiny
   workflow_dispatch:
   push:
