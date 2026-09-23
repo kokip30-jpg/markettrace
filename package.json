@@ -1,0 +1,1 @@
+{"name":"markettrace","private":true,"scripts":{"build:accounts":"esbuild src/accounts.js --bundle --minify --format=iife --target=es2022 --outfile=accounts.js","test":"node --test tests/preferences.test.cjs"},"dependencies":{"@supabase/supabase-js":"2.117.0"},"devDependencies":{"esbuild":"0.28.2"}}
