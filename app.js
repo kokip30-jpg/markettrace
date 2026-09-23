@@ -1,16 +1,15 @@
-(() => {
+(async () => {
   'use strict';
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-  const STORE = {
-    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-  };
+  let STORE;
+  try { STORE = await window.MTAccounts.ready; }
+  catch { return; }
   const state = {
     market: [], marketMeta: {}, byTicker: new Map(),
     watch: STORE.get('mt_watch_v2', ['NVDA','AAPL','MSFT','AMZN','TSLA','AMD']),
     portfolio: STORE.get('mt_port_v2', []),
-    view: 'overview', selected: null, insiderMode: 'buys', insiderData: {}, insiderQuery: '', insiderSort: 'date', insiderLimit: 40, gurus: [], guruMode: 'all', guruQuery: '', chartInterval: '5', chartIndicator: STORE.get('mt_chart_indicator','VOL'), detailBars: [], detailIntraday: [], detailHourly: [], chart: null,
+    view: 'overview', selected: null, insiderMode: 'buys', insiderData: {}, insiderQuery: '', insiderSort: 'date', insiderLimit: 40, gurus: [], guruMode: 'all', guruQuery: '', chartInterval: STORE.get('mt_chart_interval','5'), chartIndicator: STORE.get('mt_chart_indicator','VOL'), detailBars: [], detailIntraday: [], detailHourly: [], chart: null,
     compare: STORE.get('mt_compare_v1', ['NVDA','AMD','INTC']), compareRequest: 0, stockLimit: 50, insiderSignals: new Map(), guruSignals: new Map(), fundamentalPeriod: 'quarterly', detailFundamentals: null,
   };
   const cache = new Map();
@@ -199,7 +198,8 @@
     const grid=[0,.25,.5,.75,1].map(x=>`<line x1="${p}" y1="${p+x*(h-p*2)}" x2="${w-p}" y2="${p+x*(h-p*2)}" stroke="var(--line)" stroke-width="1"/><text x="${w-p}" y="${p+x*(h-p*2)-5}" text-anchor="end" fill="var(--muted)" font-size="11">${money(max-x*range)}</text>`).join('');
     $('#priceChart').innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Cenový graf"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<polygon points="${p},${h-p} ${pts} ${w-p},${h-p}" fill="url(#fill)"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
   }
-  $('#chartIntervals').addEventListener('click',e=>{const b=e.target.closest('[data-interval]');if(!b||!state.selected)return;state.chartInterval=b.dataset.interval;$$('#chartIntervals button').forEach(x=>x.classList.toggle('active',x===b));renderMarketChart(state.selected);});
+  $('#chartIntervals').addEventListener('click',e=>{const b=e.target.closest('[data-interval]');if(!b||!state.selected)return;state.chartInterval=b.dataset.interval;STORE.set('mt_chart_interval',state.chartInterval);$$('#chartIntervals button').forEach(x=>x.classList.toggle('active',x===b));renderMarketChart(state.selected);});
+  $$('#chartIntervals button').forEach(b=>b.classList.toggle('active',b.dataset.interval===state.chartInterval));
   $('#chartIndicator').value=state.chartIndicator;$('#chartIndicator').addEventListener('change',e=>{state.chartIndicator=e.target.value;STORE.set('mt_chart_indicator',state.chartIndicator);if(state.selected)renderMarketChart(state.selected);});
   $('#expandChart').addEventListener('click',()=>{const panel=$('#chartPanel'),on=!panel.classList.contains('fullscreen');panel.classList.toggle('fullscreen',on);$('#expandChart').setAttribute('aria-expanded',String(on));$('#expandChart').textContent=on?'✕ Zavřít celý graf':'⛶ Celá obrazovka';document.body.style.overflow=on?'hidden':'';setTimeout(()=>window.dispatchEvent(new Event('resize')),60);});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#chartPanel').classList.contains('fullscreen'))$('#expandChart').click();});

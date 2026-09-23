@@ -4,7 +4,7 @@
   <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#07111f">
   <meta name="description" content="MarketTrace sleduje aktivitu na amerických akciích, obchody insiderů, hlášení SEC a portfolia známých investorů."><meta name="robots" content="index,follow">
   <meta property="og:title" content="MarketTrace — pohyb chytrých peněz"><meta property="og:description" content="Akcie, insideři, SEC hlášení a guru investoři na jednom místě."><meta property="og:type" content="website"><meta property="og:url" content="https://kokip30-jpg.github.io/markettrace/"><meta name="twitter:card" content="summary">
-  <link rel="canonical" href="https://kokip30-jpg.github.io/markettrace/"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css?v=20260922-11">
+  <link rel="canonical" href="https://kokip30-jpg.github.io/markettrace/"><link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="icon.svg" type="image/svg+xml"><link rel="stylesheet" href="styles.css?v=20260923-1">
   <script defer src="https://cdn.jsdelivr.net/npm/klinecharts@9.8.12/dist/umd/klinecharts.min.js" integrity="sha384-N0+OYSoH0p5B+LMHkqKVHtLag55VxhTNJBcpNtG3q7tLMfe7sRBr4z614UxQZOg8" crossorigin="anonymous"></script>
   <title>MarketTrace — pohyb chytrých peněz</title>
 </head>
@@ -12,8 +12,19 @@
   <header class="topbar">
     <a class="brand" href="#prehled" aria-label="MarketTrace, přehled"><span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span><span>Market<span>Trace</span></span></a>
     <nav class="main-nav" aria-label="Hlavní navigace"><button data-view="overview" class="active">Přehled</button><button data-view="insiders">Insideři</button><button data-view="gurus">Smart Money</button><button data-view="compare">Porovnání</button><button data-view="portfolio">Portfolio</button></nav>
-    <div class="top-actions"><div class="feed-status" id="feedStatus" title="Stav dat"><span></span><b>Načítám data</b></div><button class="icon-btn" id="themeBtn" type="button" aria-label="Přepnout motiv">◐</button></div>
+    <div class="top-actions"><button class="secondary-btn" id="accountBtn" type="button">Přihlásit</button><div class="feed-status" id="feedStatus" title="Stav dat"><span></span><b>Načítám data</b></div><button class="icon-btn" id="themeBtn" type="button" aria-label="Přepnout motiv">◐</button></div>
   </header>
+  <dialog id="accountDialog" aria-labelledby="accountTitle">
+    <div class="panel-head"><h2 id="accountTitle">Osobní účet</h2><button id="accountClose" type="button" class="secondary-btn">Zavřít</button></div>
+    <p id="accountIdentity">Načítám účet…</p><p id="accountStatus" role="status" aria-live="polite"></p>
+    <form id="accountForm"><label for="accountName">Přihlašovací jméno nebo e-mail</label><input id="accountName" autocomplete="username" required maxlength="254">
+    <label for="accountPassword">Heslo</label><input id="accountPassword" type="password" autocomplete="current-password" required minlength="6">
+    <button id="accountSubmit" type="submit" class="primary-btn">Přihlásit se</button></form>
+    <p id="accountMessage" role="status" aria-live="polite"></p>
+    <button id="accountRetry" type="button" class="secondary-btn" hidden>Zkusit uložení znovu</button>
+    <button id="accountLogout" type="button" class="secondary-btn" hidden>Odhlásit se</button>
+    <p class="account-note">Účty zatím zakládá správce. Potřebuješ účet nebo nové heslo? Ozvi se správci webu.</p>
+  </dialog>
   <div class="app-shell">
     <aside class="sidebar">
       <div class="side-head"><h2>Sledované</h2><button id="addWatchBtn" class="tiny-btn" type="button">+ Přidat</button></div>
@@ -48,5 +59,5 @@
       <section id="view-portfolio" class="view"><div class="page-head"><div><p class="eyebrow">SOUKROMĚ V PROHLÍŽEČI</p><h1>Moje portfolio</h1><p>Výpočty probíhají pouze v tomto zařízení. MarketTrace tvoje nákupy nikam neodesílá.</p></div><div class="head-actions"><button id="exportPortfolio" class="secondary-btn">Exportovat</button><label class="secondary-btn file-btn">Importovat<input id="importPortfolio" type="file" accept="application/json"></label></div></div><section class="metric-grid portfolio-metrics" id="portfolioMetrics"></section><section class="panel portfolio-layout"><form id="portfolioForm" class="portfolio-form"><div><p class="eyebrow">NOVÝ NÁKUP</p><h2>Přidat pozici</h2></div><label>Ticker<input id="portfolioTicker" required maxlength="10" placeholder="NVDA"></label><label>Počet kusů<input id="portfolioQty" required type="number" min="0.0001" step="any" placeholder="10"></label><label>Nákupní cena v USD<input id="portfolioPrice" required type="number" min="0.01" step="any" placeholder="120,50"></label><label>Datum<input id="portfolioDate" type="date"></label><button class="primary-btn" type="submit">Přidat nákup</button></form><div id="portfolioList" class="portfolio-list"></div></section></section>
     </main>
   </div>
-  <div class="toast" id="toast" role="status" aria-live="polite"></div><footer>MarketTrace slouží pouze pro informační účely a není investičním doporučením. Datum obchodu se může lišit od data zveřejnění.</footer><script src="app.js?v=20260922-17" defer></script><script src="valuation.js?v=20260922-3" defer></script>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div><footer>MarketTrace slouží pouze pro informační účely a není investičním doporučením. Datum obchodu se může lišit od data zveřejnění.</footer><script src="accounts.js?v=20260923-1" defer></script><script src="app.js?v=20260923-1" defer></script><script src="valuation.js?v=20260922-3" defer></script>
 </body></html>

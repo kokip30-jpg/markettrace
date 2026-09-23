@@ -55,3 +55,9 @@ button.pulse-row:hover b{color:var(--blue)}
 .pulse-note{display:none}
 .list-tools,.guru-toolbar{align-items:stretch;flex-direction:column}.list-tools .search-field,.list-tools select,.guru-toolbar .search-field{width:100%}.list-tools input,.guru-toolbar input{width:100%}.guru-toolbar .filter-chips{width:100%}.list-footer{justify-content:space-between}
 }
+
+#accountDialog{width:min(440px,calc(100vw - 32px));max-height:90dvh;overflow:auto;padding:24px;border:1px solid var(--line);border-radius:16px;background:var(--bg,#07111f);color:var(--text,#eee)}
+#accountDialog::backdrop{background:rgba(0,0,0,.65)}
+#accountDialog form{display:grid;gap:12px;margin-top:20px}#accountDialog form[hidden]{display:none}
+#accountDialog input{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit}
+#accountStatus,.account-note{font-size:12px;color:var(--muted);margin:14px 0}#accountMessage{font-size:14px;margin:14px 0}
