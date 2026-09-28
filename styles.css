@@ -61,3 +61,7 @@ button.pulse-row:hover b{color:var(--blue)}
 #accountDialog form{display:grid;gap:12px;margin-top:20px}#accountDialog form[hidden]{display:none}
 #accountDialog input{width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;background:transparent;color:inherit}
 #accountStatus,.account-note{font-size:12px;color:var(--muted);margin:14px 0}#accountMessage{font-size:14px;margin:14px 0}
+
+.language-picker{display:inline-flex;align-items:center;gap:5px;padding:0 8px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted)}
+.language-picker select{border:0;background:transparent;color:var(--text);font:inherit;font-weight:700;cursor:pointer;outline:0}.language-picker option{background:var(--panel);color:var(--text)}
+@media(max-width:760px){.language-picker{padding:0 6px}.language-picker span{display:none}}

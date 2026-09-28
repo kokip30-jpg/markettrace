@@ -8,7 +8,7 @@ Databáze obsahuje tabulku `public.user_preferences` s primárním klíčem `(us
 
 Klient používá jen veřejný publishable klíč. Hesla ověřuje Supabase, nikoli JavaScript webu. Nastavení se načítá před spuštěním aplikace. Data návštěvníka bez přihlášení se nepřevádějí do účtu. Neodeslané změny se zálohují pod UUID účtu a opakují po připojení. Zápisy probíhají po jednotlivých klíčích. Při souběžné změně stejného klíče na více zařízeních vyhraje poslední zápis; nejedná se o slučování jednotlivých obchodů portfolia.
 
-Ukládá se portfolio, watchlist, porovnání, motiv, výška grafu, interval a indikátor. Stav uložení je v dialogu účtu. Bez přihlášení funguje původní místní úložiště. Při chybě prvotního načtení účtu se aplikace nespustí s prázdnými hodnotami, aby nepřepsala osobní nastavení.
+Ukládá se portfolio, watchlist, porovnání, motiv, jazyk, výška grafu, interval a indikátor. Stav uložení je v dialogu účtu. Bez přihlášení funguje původní místní úložiště. Při chybě prvotního načtení účtu se aplikace nespustí s prázdnými hodnotami, aby nepřepsala osobní nastavení.
 
 ## Vývoj
 

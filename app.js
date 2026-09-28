@@ -5,6 +5,9 @@
   let STORE;
   try { STORE = await window.MTAccounts.ready; }
   catch { return; }
+  const accountLanguage=STORE.get('mt_language',window.MTI18n.lang());
+  if(accountLanguage!==window.MTI18n.lang()){window.MTI18n.set(accountLanguage);location.reload();return;}
+  const languageSelect=$('#languageSelect');languageSelect.value=window.MTI18n.lang();languageSelect.addEventListener('change',async()=>{STORE.set('mt_language',languageSelect.value);window.MTI18n.set(languageSelect.value);await STORE.flush?.();location.reload();});
   const state = {
     market: [], marketMeta: {}, byTicker: new Map(),
     watch: STORE.get('mt_watch_v2', ['NVDA','AAPL','MSFT','AMZN','TSLA','AMD']),
@@ -15,13 +18,13 @@
   const cache = new Map();
   const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const ok = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
-  const money = v => ok(v) ? new Intl.NumberFormat('cs-CZ',{style:'currency',currency:'USD',minimumFractionDigits:Math.abs(v)<1?4:2,maximumFractionDigits:Math.abs(v)<1?4:2}).format(v) : '—';
-  const num = (v,d=2) => ok(v) ? new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:d,minimumFractionDigits:d}).format(v) : '—';
-  const compact = v => ok(v) ? new Intl.NumberFormat('cs-CZ',{notation:'compact',maximumFractionDigits:1}).format(v) : '—';
+  const money = v => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{style:'currency',currency:'USD',minimumFractionDigits:Math.abs(v)<1?4:2,maximumFractionDigits:Math.abs(v)<1?4:2}).format(v) : '—';
+  const num = (v,d=2) => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{maximumFractionDigits:d,minimumFractionDigits:d}).format(v) : '—';
+  const compact = v => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{notation:'compact',maximumFractionDigits:1}).format(v) : '—';
   const pct = v => ok(v) ? `${Number(v)>0?'+':''}${num(v,2)} %` : '—';
   const cls = v => Number(v)>0?'up':Number(v)<0?'down':'flat';
-  const date = v => v ? new Date(v).toLocaleDateString('cs-CZ') : '—';
-  const dateTime = v => v ? new Date(v).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  const date = v => v ? new Date(v).toLocaleDateString(window.MTI18n.locale()) : '—';
+  const dateTime = v => v ? new Date(v).toLocaleString(window.MTI18n.locale(),{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
   const rel = v => ok(v) ? `${num(Number(v),2)}×` : '—';
   const signalClass = s => s>=75?'high':s>=50?'mid':'';
   const rvolHint = s => ({same_time:'proti průměru ve stejný čas',estimated:'odhad podle průběhu seance',full_day:'proti celodennímu průměru',premarket:'k dispozici po otevření trhu'}[s?.rvol_basis]||'relativní objem není dostupný');
@@ -189,7 +192,7 @@
     if(shown.length<2){$('#chartMeta').textContent=interval==='D'?'Denní historie není dostupná':'Minutová historie se připravuje po nasazení';renderChart(state.detailBars);return;}
     if(!window.klinecharts){$('#chartMeta').textContent='Grafová knihovna se nenačetla – zobrazuji základní graf';renderChart(state.detailBars);return;}
     try{
-      const theme=chartStyles();box.style.background=theme.bg;window.klinecharts.registerLocale('cs-CZ',{time:'Čas',open:'Otevření',high:'Maximum',low:'Minimum',close:'Zavření',volume:'Objem',change:'Změna',turnover:'Obrat'});const chart=window.klinecharts.init(box);if(!chart)throw new Error('Graf nelze inicializovat');state.chart=chart;chart.setLocale('cs-CZ');chart.setTimezone('Europe/Prague');chart.setStyles(theme.styles);const last=shown.at(-1)?.close||0;chart.setPriceVolumePrecision(last<1?4:2,0);const indicator=state.chartIndicator,hasLongMa=shown.length>=200;if(indicator==='MA100_200'){if(hasLongMa)chart.createIndicator({name:'MA',shortName:'MA',calcParams:[100,200]},false,{id:'candle_pane'});chart.createIndicator('VOL',false,{height:125,minHeight:80});}else if(indicator){if(['MA','EMA','BOLL'].includes(indicator))chart.createIndicator(indicator,false,{id:'candle_pane'});else chart.createIndicator(indicator,false,{height:125,minHeight:80});}chart.applyNewData(shown);chart.scrollToRealTime();const intervalLabel=interval==='D'?'1D':interval==='60'?'1h':interval+'m',maUnit=interval==='D'?'dnů':interval==='60'?'hodin':`svíček po ${interval} min`;const indicatorNote=indicator==='MA100_200'?(hasLongMa?` · MA 100/200 ${maUnit} + objem`:` · MA 100/200 čeká na historii (${shown.length}/200)`):'';$('#chartMeta').textContent=`${shown.length} svíček · interval ${intervalLabel}${indicatorNote} · čas Praha · data přibližně 15 min zpožděná`;
+      const theme=chartStyles();box.style.background=theme.bg;window.klinecharts.registerLocale('cs-CZ',{time:'Čas',open:'Otevření',high:'Maximum',low:'Minimum',close:'Zavření',volume:'Objem',change:'Změna',turnover:'Obrat'});const chart=window.klinecharts.init(box);if(!chart)throw new Error('Graf nelze inicializovat');state.chart=chart;chart.setLocale(window.MTI18n.lang()==='en'?'en-US':'cs-CZ');chart.setTimezone('Europe/Prague');chart.setStyles(theme.styles);const last=shown.at(-1)?.close||0;chart.setPriceVolumePrecision(last<1?4:2,0);const indicator=state.chartIndicator,hasLongMa=shown.length>=200;if(indicator==='MA100_200'){if(hasLongMa)chart.createIndicator({name:'MA',shortName:'MA',calcParams:[100,200]},false,{id:'candle_pane'});chart.createIndicator('VOL',false,{height:125,minHeight:80});}else if(indicator){if(['MA','EMA','BOLL'].includes(indicator))chart.createIndicator(indicator,false,{id:'candle_pane'});else chart.createIndicator(indicator,false,{height:125,minHeight:80});}chart.applyNewData(shown);chart.scrollToRealTime();const intervalLabel=interval==='D'?'1D':interval==='60'?'1h':interval+'m',maUnit=interval==='D'?'dnů':interval==='60'?'hodin':`svíček po ${interval} min`;const indicatorNote=indicator==='MA100_200'?(hasLongMa?` · MA 100/200 ${maUnit} + objem`:` · MA 100/200 čeká na historii (${shown.length}/200)`):'';$('#chartMeta').textContent=`${shown.length} svíček · interval ${intervalLabel}${indicatorNote} · čas Praha · data přibližně 15 min zpožděná`;
     }catch(e){console.error('KLineChart:',e);state.chart=null;$('#chartMeta').textContent='Pokročilý graf se nepodařilo vykreslit';renderChart(state.detailBars);}
   }
   function renderChart(rows){

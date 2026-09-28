@@ -5,7 +5,7 @@
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const ok = v => v != null && v !== '' && !isNaN(v) && isFinite(v);
   const nfc = {};
-  const num = (v, d = 2) => ok(v) ? (nfc[d] ||= new Intl.NumberFormat('cs-CZ', {minimumFractionDigits: d, maximumFractionDigits: d})).format(v) : '—';
+  const num = (v, d = 2) => ok(v) ? (nfc[d] ||= new Intl.NumberFormat(window.MTI18n?.locale?.()||'cs-CZ', {minimumFractionDigits: d, maximumFractionDigits: d})).format(v) : '—';
   const usd = v => ok(v) ? num(v, Math.abs(v) >= 100 ? 0 : 2) + ' $' : '—';
   const pct = v => ok(v) ? (v > 0 ? '+' : '') + num(v, 0) + ' %' : '—';
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -172,7 +172,7 @@
       const v = yMin + (yMax - yMin) * i / 4, y = Y(v);
       grid.push(`<line x1="${L}" x2="${xe}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1"/>${i > 0 && i < 4 ? `<text x="${L + 2}" y="${y - 4}" opacity=".75">${num(v, v >= 100 ? 0 : 1)}</text>` : ''}`);
     }
-    const dlab = t => new Date(t).toLocaleDateString('cs-CZ', {month: 'numeric', year: '2-digit'});
+    const dlab = t => new Date(t).toLocaleDateString(window.MTI18n?.locale?.()||'cs-CZ', {month: 'numeric', year: '2-digit'});
     const up = v => (v / last.c - 1) * 100;
     const ys = [[tgt.high, 'var(--green)', 'Max'], [tgt.avg, 'var(--blue)', 'Průměr'], [tgt.low, 'var(--red)', 'Min']];
     // štítky se nesmí překrývat: rozestup aspoň 30 px
