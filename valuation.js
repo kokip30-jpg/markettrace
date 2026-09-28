@@ -6,7 +6,8 @@
   const ok = v => v != null && v !== '' && !isNaN(v) && isFinite(v);
   const nfc = {};
   const num = (v, d = 2) => ok(v) ? (nfc[d] ||= new Intl.NumberFormat(window.MTI18n?.locale?.()||'cs-CZ', {minimumFractionDigits: d, maximumFractionDigits: d})).format(v) : '—';
-  const usd = v => ok(v) ? num(v, Math.abs(v) >= 100 ? 0 : 2) + ' $' : '—';
+  const lang = () => (window.MTI18n ? window.MTI18n.lang() : 'cs');
+  const usd = v => { if(!ok(v)) return '—'; const n = num(v, Math.abs(v) >= 100 ? 0 : 2); return lang() === 'en' ? `$${n}` : `${n} $`; };
   const pct = v => ok(v) ? (v > 0 ? '+' : '') + num(v, 0) + ' %' : '—';
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const bucket = () => Math.floor(Date.now() / 300000);
@@ -95,7 +96,7 @@
     if(tgt && ok(tgt.avg)){
       const n = (tgt.buy || 0) + (tgt.hold || 0) + (tgt.sell || 0),reliable=n>=5;
       m.push({key: 'an', off: !reliable, name: 'Cílová cena analytiků', value: tgt.avg,
-        why: `${reliable?'Použito':'Nezapočítáno'}: průměr ${n||'neznámého počtu'} analytiků na 12 měsíců dopředu (rozpětí ${usd(tgt.low)} až ${usd(tgt.high)}). Pro výpočet požadujeme alespoň 5 analytiků.`});
+        why: [reliable ? 'Použito' : 'Nezapočítáno', {v: '·'}, 'průměr cílových cen analytiků na 12 měsíců.', 'Analytiků:', {v: n || '?'}, 'rozpětí', {v: `${usd(tgt.low)} – ${usd(tgt.high)}`}, 'Metodu započítáváme od pěti analytiků.']});
     }
     // 2) zisk × férové P/E podle růstu
     const eps = t.eps_diluted;
@@ -103,18 +104,18 @@
       const gp = clamp((ok(g) ? g : 0.05) * 100, 0, 40);
       const fairPE = clamp(12 + 0.7 * gp, 12, 40);
       m.push({key: 'pe', name: 'Zisk a růst (P/E)', value: eps * fairPE,
-        why: `Zisk na akcii ${num(eps)} $ × férové P/E ${num(fairPE, 0)} odvozené od růstu tržeb ${ok(g) ? pct(g * 100) : 'neznámého'} ročně. Dnešní P/E ${ok(price / eps) ? num(price / eps, 0) : '—'}.`});
+        why: ['Zisk na akcii', {v: usd(eps)}, 'krát férové P/E', {v: num(fairPE, 0)}, 'odvozené od ročního růstu tržeb', {v: ok(g) ? pct(g * 100) : '—'}, 'Dnešní P/E:', {v: ok(price / eps) ? num(price / eps, 0) : '—'}]});
     }else{
-      m.push({key: 'pe', off: true, name: 'Zisk a růst (P/E)', value: null, why: 'Firma je za poslední rok ve ztrátě, ocenění podle zisku nedává smysl.'});
+      m.push({key: 'pe', off: true, name: 'Zisk a růst (P/E)', value: null, why: ['Firma je za poslední rok ve ztrátě, ocenění podle zisku nedává smysl.']});
     }
     // 3) volné cash flow (DCF)
     const fcf = t.free_cash_flow;
     if(ok(fcf) && fcf > 0 && ok(shares) && shares > 0){
       const netCashPs = ok(v.net_debt) ? -v.net_debt / shares : 0;
       m.push({key: 'dcf', name: 'Volné cash flow (DCF)', value: dcf(fcf / shares, gUse, netCashPs),
-        why: `Hotovost, kterou firma vydělá: dnes ${num(fcf / shares)} $ na akcii, růst ${pct(gUse * 100)} ročně s postupným zpomalením na 3 %, diskont 9 %.`});
+        why: ['Hotovost, kterou firma vydělá. Dnes', {v: usd(fcf / shares)}, 'na akcii, růst', {v: pct(gUse * 100)}, 'ročně s postupným zpomalením na 3 %, diskont 9 %.']});
     }else{
-      m.push({key: 'dcf', off: true, name: 'Volné cash flow (DCF)', value: null, why: 'Firma zatím nevytváří kladné volné cash flow, výpočet nejde použít.'});
+      m.push({key: 'dcf', off: true, name: 'Volné cash flow (DCF)', value: null, why: ['Firma zatím nevytváří kladné volné cash flow, výpočet nejde použít.']});
     }
     const usable=m.filter(x=>!x.off&&ok(x.value)&&x.value>0),vals=usable.map(x=>x.value).sort((a,b)=>a-b);
     if(!vals.length) return {methods:m,fair:null,confidence:'none',reason:'Pro spolehlivý odhad není dostupná ani jedna použitelná metoda.'};
@@ -129,7 +130,7 @@
   /* ---------- panel: férová hodnota ---------- */
   function fairHtml(sym, price, ev, hasFund){
     const label = {under: 'Podhodnocená', fair: 'Férově oceněná', over: 'Nadhodnocená'};
-    const methods=ev.methods.map(x=>`<li class="${x.off?'off':''}"><b>${esc(x.name)}</b><strong>${x.off||!ok(x.value)?'—':usd(x.value)}</strong><small>${esc(x.why)}</small></li>`).join('');
+    const methods=ev.methods.map(x=>`<li class="${x.off?'off':''}"><b>${esc(x.name)}</b><strong>${x.off||!ok(x.value)?'—':usd(x.value)}</strong><small>${(Array.isArray(x.why) ? x.why : [x.why]).map(part => typeof part === 'string' ? `<span>${esc(part)}</span>` : esc(part.v)).join(' ')}</small></li>`).join('');
     if(!ev.fair){
       return `<div class="panel-head"><div><p class="eyebrow">FÉROVÁ HODNOTA</p><h2>Je ${esc(sym)} levná, nebo drahá?</h2></div></div><div class="fv-body">
         <div class="fv-verdict"><span class="fv-badge na">Nelze spolehlivě určit</span></div>${methods?`<ul class="fv-methods">${methods}</ul>`:''}
@@ -139,7 +140,7 @@
     const pos = v => clamp((v - lo) / (hi - lo) * 100, 2, 98);
     return `<div class="panel-head"><div><p class="eyebrow">FÉROVÁ HODNOTA</p><h2>Je ${esc(sym)} levná, nebo drahá?</h2></div></div><div class="fv-body">
       <div class="fv-verdict"><span class="fv-badge ${ev.verdict||'na'}">${ev.verdict?label[ev.verdict]:'Orientační odhad'}</span><span class="fv-badge na">spolehlivost ${ev.confidence==='high'?'vyšší':ev.confidence==='medium'?'střední':'nízká'}</span></div>
-      <div class="fv-big">${usd(ev.fair)}<small>${ev.verdict?'střed použitých metod':'pouze jedna použitelná metoda'} · dnes ${usd(price)} (${ev.diff > 0 ? 'rozdíl +' + num(ev.diff, 0) + ' %' : 'rozdíl ' + num(ev.diff, 0) + ' %'})</small></div>
+      <div class="fv-big">${usd(ev.fair)}<small><span>${ev.verdict?'střed použitých metod':'pouze jedna použitelná metoda'}</span> · <span>dnes</span> ${usd(price)} (<span>rozdíl</span> ${ev.diff > 0 ? '+' : ''}${num(ev.diff, 0)} %)</small></div>
       <div class="fv-scale" aria-hidden="true"><div class="fv-track"></div>
         <div class="fv-mark fvm" style="left:${pos(ev.fair)}%">Férová<i></i></div>
         <div class="fv-mark" style="left:${pos(price)}%"><i></i><span>Dnes</span></div>

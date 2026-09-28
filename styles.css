@@ -65,3 +65,22 @@ button.pulse-row:hover b{color:var(--blue)}
 .language-picker{display:inline-flex;align-items:center;gap:5px;padding:0 8px;height:36px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--muted)}
 .language-picker select{border:0;background:transparent;color:var(--text);font:inherit;font-weight:700;cursor:pointer;outline:0}.language-picker option{background:var(--panel);color:var(--text)}
 @media(max-width:760px){.language-picker{padding:0 6px}.language-picker span{display:none}}
+
+/* --- mobilní doladění: menu, nástroje tabulky, posuvné pásy --- */
+@media(max-width:760px){
+  .main-nav{gap:2px;scrollbar-width:none}
+  .main-nav::-webkit-scrollbar{display:none}
+  .main-nav button{flex:0 0 auto;white-space:nowrap;padding:0 12px}
+  .table-tools{flex-wrap:wrap;gap:8px}
+  .table-tools .search-field{flex:1 0 100%}
+  .table-tools select{flex:1 1 0;min-width:0}
+  .watchlist,.market-pulse{padding-right:14px;scroll-snap-type:x proximity;scrollbar-width:none}
+  .watchlist::-webkit-scrollbar,.market-pulse::-webkit-scrollbar{display:none}
+  .watch-row,.market-pulse .pulse-row{scroll-snap-align:start}
+  .stock-table th:first-child,.stock-table td:first-child{position:sticky;left:0;background:var(--panel);z-index:1}
+  .stock-table tbody tr:hover td:first-child{background:var(--panel)}
+}
+@media(max-width:520px){
+  .stock-table th:nth-child(5),.stock-table td:nth-child(5){display:none}
+  .stock-id small{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+}
