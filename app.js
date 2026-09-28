@@ -213,19 +213,27 @@
   window.addEventListener('resize',()=>state.chart?.resize());
   function groupTrades(rows){const m=new Map();for(const r of rows){const k=`${r.a||''}|${r.k||''}|${r.o||''}`;const g=m.get(k)||{...r,value:0,shares:0};g.value+=(r.s||0)*(r.p||0);g.shares+=r.s||0;m.set(k,g);}return [...m.values()];}
   function renderDetailInsiders(rows){const list=groupTrades(rows).filter(r=>['P','S'].includes(r.k)).slice(0,9);$('#detailInsiders').innerHTML=list.length?list.map(tradeCard).join(''):'<div class="empty-state">Pro tento titul nejsou v uloženém období dostupné insider obchody.</div>';}
-  function tradeCard(r){const buy=r.k==='P'||r.ad==='A',value=r.value||((r.s||0)*(r.p||0));return `<article class="data-card"><div class="card-top"><span class="badge ${buy?'buy':'sell'}">${buy?'Nákup':'Prodej'}</span><span>${esc(r.t||'')}</span><strong>${compact(value)} $</strong></div><h3>${esc(title(r.o||'Neznámý insider'))}</h3><p>${esc(r.r||r.i||'')} · obchod ${date(r.d)} · zveřejněno ${date(r.f)}</p><div class="card-tags">${r.pl?'<span class="badge">Plán 10b5-1</span>':''}${r.sc?`<span class="badge">Skóre ${esc(r.sc)}/10</span>`:''}</div>${r.u?`<a href="${esc(r.u)}" target="_blank" rel="noopener noreferrer">Originální hlášení SEC →</a>`:''}</article>`;}
+  const MAKER_RE=/\b(LLC|L\.?P\.?|LTD|INC|FUND|CAPITAL|PARTNERS|SECURITIES|TRADING|FINANCIAL|MARKETS|ADVISORS|ASSET|INVESTMENTS?|HOLDINGS?)\b/i;
+  function isMarketMaker(r){const fundName=MAKER_RE.test(r.o||'');const passive=!!r.tp&&!r.of&&!r.dr;const etf=/-USD$/.test(r.t||'')||/\b(ETF|TRUST|FUND)\b/i.test(r.i||'');return fundName&&(passive||etf);}
+  function insiderRecord(r){const rec=state.insiderRecords&&state.insiderRecords[String(r.o||'').toUpperCase().trim()];if(!rec)return '';const pick=['m12','m6','m3','m1'].find(k=>k in rec);if(!pick)return '';const months={m12:12,m6:6,m3:3,m1:1}[pick];return `<span class="badge" title="${esc(`Medián výnosu ${months} měsíců po předchozích nákupech této osoby (${rec[pick+'n']} nákupů, ${rec[pick+'w']} % v plusu)`)}">Historie ${rec[pick]>0?'+':''}${num(rec[pick],0)} % / ${months} m</span>`;}
+  function tradeCard(r){const buy=r.k==='P'||r.ad==='A',value=r.value||((r.s||0)*(r.p||0));return `<article class="data-card"><div class="card-top"><span class="badge ${buy?'buy':'sell'}">${buy?'Nákup':'Prodej'}</span><span>${esc(r.t||'')}</span><strong>${compact(value)} $</strong></div><h3>${esc(title(r.o||'Neznámý insider'))}</h3><p>${esc(r.r||r.i||'')} · obchod ${date(r.d)} · zveřejněno ${date(r.f)}</p><div class="card-tags">${r.pl?'<span class="badge">Plán 10b5-1</span>':''}${r.sc?`<span class="badge">Skóre ${esc(r.sc)}/10</span>`:''}${isMarketMaker(r)?'<span class="badge">Fond nebo instituce</span>':insiderRecord(r)}</div>${r.u?`<a href="${esc(r.u)}" target="_blank" rel="noopener noreferrer">Originální hlášení SEC →</a>`:''}</article>`;}
 
   const INS_HINT={buys:'Nákupy na volném trhu, za které insider zaplatil vlastními penězi. Často mají vyšší vypovídací hodnotu než prodeje.',sells:'Velké prodeje mohou souviset s daněmi, diverzifikací nebo předem nastaveným plánem. Samy o sobě nejsou automaticky negativním signálem.',f144:'Form 144 oznamuje záměr prodat akcie ještě před uskutečněním prodeje.',f13d:'Schedule 13D zveřejňuje podíl nad 5 %, pokud investor může chtít firmu aktivně ovlivňovat.'};
   function insiderValue(r){return Number(r.v??r.value)||((Number(r.s)||0)*(Number(r.p)||0));}
   function renderInsiderFeed(){
     const mode=state.insiderMode,source=state.insiderData[mode]||[],q=state.insiderQuery.trim().toLowerCase();
     let rows=['buys','sells'].includes(mode)?groupTrades(source):[...source];
+    if(state.hideNoise&&['buys','sells'].includes(mode))rows=rows.filter(r=>!isMarketMaker(r));
     rows=rows.filter(r=>!q||`${r.t||''} ${r.i||''} ${r.o||''} ${r.r||''}`.toLowerCase().includes(q));
     const sorters={date:(a,b)=>new Date(b.d||b.f||0)-new Date(a.d||a.f||0),value:(a,b)=>insiderValue(b)-insiderValue(a),score:(a,b)=>(b.sc||0)-(a.sc||0)};
     rows.sort(sorters[state.insiderSort]||sorters.date);const shown=rows.slice(0,state.insiderLimit),box=$('#insiderFeed');
     box.innerHTML=shown.length?(mode==='f144'?shown.map(form144Card).join(''):mode==='f13d'?shown.map(form13dCard).join(''):shown.map(tradeCard).join('')):'<div class="empty-state">Žádná hlášení neodpovídají filtru.</div>';
     $('#insiderCount').textContent=`Zobrazeno ${shown.length} z ${rows.length}`;$('#insiderMore').hidden=shown.length>=rows.length;
   }
+  state.hideNoise=STORE.get('mt_hide_noise',true);state.insiderRecords=null;
+  (async()=>{try{state.insiderRecords=await data('insider-records.json');}catch{state.insiderRecords=null;}})();
+  $('#insiderNoise')?.addEventListener('click',()=>{state.hideNoise=!state.hideNoise;STORE.set('mt_hide_noise',state.hideNoise);$('#insiderNoise').classList.toggle('active',state.hideNoise);$('#insiderNoise').setAttribute('aria-pressed',String(state.hideNoise));renderInsiderFeed();});
+  if($('#insiderNoise')){$('#insiderNoise').classList.toggle('active',state.hideNoise);$('#insiderNoise').setAttribute('aria-pressed',String(state.hideNoise));}
   async function loadInsiders(){const mode=state.insiderMode;$('#insiderExplain').textContent=INS_HINT[mode];const box=$('#insiderFeed');box.innerHTML='<div class="skeleton h40"></div>';try{const file={buys:'feed-buys.json',sells:'feed-sells.json',f144:'f144.json',f13d:'f13d.json'}[mode];const rows=state.insiderData[mode]||await data(file);state.insiderData[mode]=rows||[];if(mode==='buys')renderClusterBuys(rows||[]);else if(state.insiderData.buys)renderClusterBuys(state.insiderData.buys);renderInsiderFeed();}catch{box.innerHTML='<div class="empty-state">Data se nepodařilo načíst.</div>';}}
   function renderClusterBuys(rows){
     const groups=new Map();for(const r of rows){if(!r.t)continue;const g=groups.get(r.t)||{ticker:r.t,company:r.i,value:0,names:new Set(),trades:0,last:null};g.value+=(Number(r.s)||0)*(Number(r.p)||0);g.trades++;if(r.o)g.names.add(r.o);if(!g.last||new Date(r.d)>new Date(g.last))g.last=r.d;groups.set(r.t,g);}const clusters=[...groups.values()].filter(g=>g.names.size>=2).sort((a,b)=>b.names.size-a.names.size||b.value-a.value).slice(0,8);
@@ -292,9 +300,9 @@
 
   async function boot(){
     $('#portfolioDate').value=new Date().toISOString().slice(0,10);renderWatch();
-    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?'Poslední dostupná data':'Data připojena';$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderMetrics();renderStocks();renderHighlights();renderPortfolio();
+    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?'Poslední dostupná data':'Data připojena';$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderMetrics();renderStocks();renderHighlights();renderPortfolio();renderAlerts();
     }catch(e){$('#feedStatus').className='feed-status error';$('#feedStatus b').textContent='Data nejsou dostupná';$('#stockRows').innerHTML='<tr><td colspan="8"><div class="empty-state">Tržní snapshot se právě připravuje. Zkus stránku obnovit za několik minut.</div></td></tr>';console.error(e);}
-    const h=decodeURIComponent(location.hash.slice(1)),route=h.toLowerCase();if(!route||route==='prehled'||route==='overview')setView('overview');else if(['insiders','gurus','compare','portfolio'].includes(route))setView(route);else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h.toUpperCase()))openDetail(h.toUpperCase());
+    applyRoute();
   }
 
   async function openBuysSheet(){
@@ -313,5 +321,21 @@
   $('#marketMetrics').addEventListener('click',e=>{if(e.target.closest('[data-open-buys]'))openBuysSheet();});
   $('#marketMetrics').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.closest('[data-open-buys]')){e.preventDefault();openBuysSheet();}});
   window.MT_openBuys=openBuysSheet;
+
+  const alerts={list:STORE.get('mt_alerts',[])};
+  function renderAlerts(){const box=$('#alertList');if(!box)return;
+    box.innerHTML=alerts.list.length?alerts.list.map((a,i)=>{const row=state.byTicker.get(a.t),price=row?.price;const hit=ok(price)&&(a.dir==='above'?price>=a.v:price<=a.v);
+      return `<li><b>${esc(a.t)}</b> <span>${a.dir==='above'?'vystoupí nad':'klesne pod'} ${money(a.v)}</span><span class="state">${ok(price)?`nyní ${money(price)}${hit?' · splněno':''}`:'cena se načítá'}</span><button type="button" data-alert="${i}" aria-label="Smazat upozornění">Smazat</button></li>`;}).join(''):'<li class="empty-state">Zatím žádné upozornění.</li>';}
+  $('#alertForm')?.addEventListener('submit',e=>{e.preventDefault();const t=$('#alertTicker').value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g,''),v=Number($('#alertPrice').value),dir=$('#alertDir').value;
+    if(!t||!(v>0))return;alerts.list.push({t,dir,v});STORE.set('mt_alerts',alerts.list);e.target.reset();renderAlerts();toast('Upozornění přidáno');});
+  $('#alertList')?.addEventListener('click',e=>{const b=e.target.closest('[data-alert]');if(!b)return;alerts.list.splice(Number(b.dataset.alert),1);STORE.set('mt_alerts',alerts.list);renderAlerts();});
+  $('#alertCopy')?.addEventListener('click',async()=>{const json=JSON.stringify(alerts.list.map(a=>a.dir==='above'?{t:a.t,above:a.v}:{t:a.t,below:a.v}),null,2);
+    const text=`"alerts": ${json},`;try{await navigator.clipboard.writeText(text);toast('Zkopírováno, vložte do config.json');}catch{prompt('Zkopírujte tento text do config.json:',text);}});
+  renderAlerts();
+  function applyRoute(){const h=decodeURIComponent(location.hash.slice(1)),route=h.toLowerCase();
+    if(!route||route==='prehled'||route==='overview')setView('overview');
+    else if(['insiders','gurus','compare','portfolio'].includes(route))setView(route);
+    else if(/^[A-Z][A-Z0-9.\-]{0,9}$/.test(h.toUpperCase()))openDetail(h.toUpperCase());}
+  window.addEventListener('hashchange',applyRoute);
   boot();
 })();

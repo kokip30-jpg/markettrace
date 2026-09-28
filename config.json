@@ -223,5 +223,6 @@
     "IWM": "Russell 2000 · iShares ETF",
     "VIX": "Index volatility VIX · „index strachu“",
     "VIXY": "VIX futures · ProShares ETF"
-  }
+  },
+  "alerts": []
 }

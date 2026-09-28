@@ -1760,6 +1760,106 @@ def update_targets(symbols):
         log('cílové ceny analytiků:', done, 'titulů')
 
 
+# ---------------------------------------------------------------- úspěšnost insiderů
+def _bar_close_at(bars, day):
+    """Zavírací cena v daný den, jinak poslední předchozí obchodní den."""
+    prev = None
+    for b in bars:
+        if b[0] > day:
+            break
+        prev = b
+    return prev[4] if prev else None
+
+
+def update_insider_records(meta, symbols):
+    """Jak dopadly předchozí nákupy insiderů: výnos 1, 3, 6 a 12 měsíců po nákupu."""
+    if meta.get('records_at', '')[:10] == TODAY.isoformat():
+        return
+    people = {}
+    horizons = (('m1', 30), ('m3', 91), ('m6', 182), ('m12', 365))
+    for sym in symbols:
+        if not time_left():
+            return
+        rows = (load(f't/{sym}.json', {}) or {}).get('tx') or []
+        bars = load(f'bars/{sym}.json', [])
+        if not rows or not bars:
+            continue
+        last_day = bars[-1][0]
+        for r in rows:
+            if r.get('k') != 'P' or not r.get('d') or not r.get('p'):
+                continue
+            buy_price = r['p']
+            if buy_price <= 0:
+                continue
+            who = ' '.join((r.get('o') or '').split()).upper()
+            if not who:
+                continue
+            rec = people.setdefault(who, {'n': 0, 'tickers': set(), 'ret': {k: [] for k, _ in horizons}})
+            rec['n'] += 1
+            rec['tickers'].add(sym)
+            base = datetime.fromisoformat(r['d'])
+            for key, days in horizons:
+                target = (base + timedelta(days=days)).date().isoformat()
+                if target > last_day:
+                    continue
+                close = _bar_close_at(bars, target)
+                if close:
+                    rec['ret'][key].append((close / buy_price - 1) * 100)
+    out = {}
+    for who, rec in people.items():
+        entry = {'n': rec['n'], 't': sorted(rec['tickers'])[:6]}
+        for key in ('m1', 'm3', 'm6', 'm12'):
+            vals = sorted(rec['ret'][key])
+            if len(vals) >= 2:
+                mid = len(vals) // 2
+                entry[key] = round(vals[mid] if len(vals) % 2 else (vals[mid - 1] + vals[mid]) / 2, 1)
+                entry[key + 'n'] = len(vals)
+                entry[key + 'w'] = round(sum(1 for v in vals if v > 0) / len(vals) * 100)
+        if any(k in entry for k in ('m1', 'm3', 'm6', 'm12')):
+            out[who] = entry
+    if out:
+        save('insider-records.json', out)
+        meta['records_at'] = NOW.isoformat()
+        log('úspěšnost insiderů:', len(out), 'osob')
+
+
+def update_alerts(meta, market_rows):
+    """Vlastní cenová upozornění z config.json → ntfy."""
+    alerts = CFG.get('alerts') or []
+    if not alerts or not TOPIC:
+        return
+    prices = {r['ticker']: r for r in market_rows}
+    state = load('alert-state.json', {})
+    fired = 0
+    for i, a in enumerate(alerts):
+        sym = str(a.get('t', '')).upper()
+        row = prices.get(sym)
+        if not row or not ok_num(row.get('price')):
+            continue
+        price = row['price']
+        key = f"{sym}:{a.get('above', '')}:{a.get('below', '')}:{i}"
+        hit = (ok_num(a.get('above')) and price >= a['above']) or (ok_num(a.get('below')) and price <= a['below'])
+        if hit and not state.get(key):
+            limit = a['above'] if ok_num(a.get('above')) else a['below']
+            way = 'vystoupil nad' if ok_num(a.get('above')) else 'klesl pod'
+            ntfy(f'{sym}: {way} {limit}', f"{row.get('name') or sym}: cena {round(price, 2)}. {a.get('note', '')}".strip(),
+                 SITE + '#' + sym, ['bell'], 4)
+            state[key] = NOW.isoformat()
+            fired += 1
+        elif not hit and state.get(key):
+            state.pop(key, None)  # znovu nabít, až se cena vrátí
+    save('alert-state.json', state)
+    if fired:
+        log('upozornění na cenu:', fired)
+
+
+def ok_num(v):
+    try:
+        return v is not None and not isinstance(v, bool) and float(v) == float(v)
+    except (TypeError, ValueError):
+        return False
+
+
 def main():
     os.makedirs(DATA, exist_ok=True)
     meta = load('meta.json', {})
@@ -1832,6 +1932,14 @@ def main():
     meta['fundamentals_count'] = sum(
         os.path.exists(os.path.join(DATA, 'fundamentals', f'{sym}.json')) for sym in tickers)
 
+    try:
+        update_insider_records(meta, tickers)
+    except Exception as e:
+        log('CHYBA úspěšnost insiderů:', repr(e))
+    try:
+        update_alerts(meta, (load('market.json', {}) or {}).get('symbols') or [])
+    except Exception as e:
+        log('CHYBA upozornění na cenu:', repr(e))
     try:
         update_targets(tickers)
     except Exception as e:

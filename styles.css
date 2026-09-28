@@ -84,3 +84,18 @@ button.pulse-row:hover b{color:var(--blue)}
   .stock-table th:nth-child(5),.stock-table td:nth-child(5){display:none}
   .stock-id small{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
 }
+
+.alerts-body{padding:16px 18px 20px;display:grid;gap:12px}
+.alert-form{display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:10px;align-items:end}
+.alert-form label{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted);font-weight:600}
+.alert-form input,.alert-form select{background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:10px 12px;color:var(--text);font:inherit;font-size:16px}
+.alert-list{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.alert-list li{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:10px;padding:9px 12px;font-size:14px}
+.alert-list b{font-weight:800}
+.alert-list .state{margin-left:auto;font-size:12px;color:var(--muted)}
+.alert-list button{border:0;background:none;color:var(--red);font-weight:700;padding:4px 6px;cursor:pointer}
+.alert-actions{display:flex;gap:10px;flex-wrap:wrap}
+.record-badge{display:inline-flex;gap:6px;align-items:center}
+@media(max-width:760px){.alert-form{grid-template-columns:1fr 1fr}.alert-form button{grid-column:1/-1}}
+.alert-form label{min-width:0}
+.alert-form input,.alert-form select{width:100%;min-width:0}
