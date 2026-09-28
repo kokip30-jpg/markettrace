@@ -79,8 +79,18 @@ def fetch_text(base, path):
 
 
 def validate_remote(base):
+    # The Pages CDN may still serve the previous deployment for a short time
+    # after deploy-pages reports success.  Check the script revision from the
+    # checkout instead of a hard-coded historical revision, so this smoke test
+    # verifies that *this* deployment is live.
+    with open(os.path.join(ROOT, 'index.html'), encoding='utf-8') as handle:
+        local_index = handle.read()
+    expected_app = re.search(r"<script\s+src=[\"'](app\.js\?v=[^\"']+)[\"']", local_index)
+    require(expected_app, 'index.html neobsahuje verzovaný app.js')
+    expected_app_url = expected_app.group(1)
+
     last_error = None
-    for attempt in range(5):
+    for attempt in range(24):
         try:
             index = fetch_text(base, f'?smoke={int(time.time())}')
             config = fetch_json(base, f'config.json?smoke={int(time.time())}')
@@ -88,7 +98,8 @@ def validate_remote(base):
             meta = fetch_json(base, f'data/meta.json?smoke={int(time.time())}')
             bmnr = fetch_json(base, f'data/hourly/BMNR.json?smoke={int(time.time())}')
             debug = fetch_json(base, f'data/debug.json?smoke={int(time.time())}')
-            require(re.search(r'app\.js\?v=20260922-(?:1[5-9]|[2-9]\d)', index), 'produkce nemá očekávanou verzi app.js')
+            require(expected_app_url in index,
+                    f'produkce ještě nemá aktuální {expected_app_url}')
             require('admin@masaze-tisnov.cz' not in json.dumps([config, debug]).lower(), 'produkce zveřejňuje osobní e-mail')
             require(len(market.get('symbols', [])) >= 120, 'produkční market.json je neúplný')
             require(meta.get('market_at') or market.get('updated'), 'chybí čas aktualizace cen')
@@ -97,7 +108,7 @@ def validate_remote(base):
             return
         except Exception as exc:
             last_error = exc
-            if attempt < 4:
+            if attempt < 23:
                 time.sleep(5)
     raise last_error
 
