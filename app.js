@@ -1,28 +1,30 @@
-(() => {
+(async () => {
   'use strict';
   const $ = (s, root = document) => root.querySelector(s);
   const $$ = (s, root = document) => [...root.querySelectorAll(s)];
-  const STORE = {
-    get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} }
-  };
+  let STORE;
+  try { STORE = await window.MTAccounts.ready; }
+  catch { return; }
+  const accountLanguage=STORE.get('mt_language',window.MTI18n.lang());
+  if(accountLanguage!==window.MTI18n.lang()){window.MTI18n.set(accountLanguage);location.reload();return;}
+  const languageSelect=$('#languageSelect');languageSelect.value=window.MTI18n.lang();languageSelect.addEventListener('change',async()=>{STORE.set('mt_language',languageSelect.value);window.MTI18n.set(languageSelect.value);await STORE.flush?.();location.reload();});
   const state = {
     market: [], marketMeta: {}, byTicker: new Map(),
     watch: STORE.get('mt_watch_v2', ['NVDA','AAPL','MSFT','AMZN','TSLA','AMD']),
     portfolio: STORE.get('mt_port_v2', []),
-    view: 'overview', selected: null, insiderMode: 'buys', insiderData: {}, insiderQuery: '', insiderSort: 'date', insiderLimit: 40, gurus: [], guruMode: 'all', guruQuery: '', chartInterval: '5', chartIndicator: STORE.get('mt_chart_indicator','VOL'), detailBars: [], detailIntraday: [], detailHourly: [], chart: null,
+    view: 'overview', selected: null, insiderMode: 'buys', insiderData: {}, insiderQuery: '', insiderSort: 'date', insiderLimit: 40, gurus: [], guruMode: 'all', guruQuery: '', chartInterval: STORE.get('mt_chart_interval','5'), chartIndicator: STORE.get('mt_chart_indicator','VOL'), detailBars: [], detailIntraday: [], detailHourly: [], chart: null,
     compare: STORE.get('mt_compare_v1', ['NVDA','AMD','INTC']), compareRequest: 0, stockLimit: 50, insiderSignals: new Map(), guruSignals: new Map(), fundamentalPeriod: 'quarterly', detailFundamentals: null,
   };
   const cache = new Map();
   const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
   const ok = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
-  const money = v => ok(v) ? new Intl.NumberFormat('cs-CZ',{style:'currency',currency:'USD',minimumFractionDigits:Math.abs(v)<1?4:2,maximumFractionDigits:Math.abs(v)<1?4:2}).format(v) : '—';
-  const num = (v,d=2) => ok(v) ? new Intl.NumberFormat('cs-CZ',{maximumFractionDigits:d,minimumFractionDigits:d}).format(v) : '—';
-  const compact = v => ok(v) ? new Intl.NumberFormat('cs-CZ',{notation:'compact',maximumFractionDigits:1}).format(v) : '—';
+  const money = v => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{style:'currency',currency:'USD',minimumFractionDigits:Math.abs(v)<1?4:2,maximumFractionDigits:Math.abs(v)<1?4:2}).format(v) : '—';
+  const num = (v,d=2) => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{maximumFractionDigits:d,minimumFractionDigits:d}).format(v) : '—';
+  const compact = v => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{notation:'compact',maximumFractionDigits:1}).format(v) : '—';
   const pct = v => ok(v) ? `${Number(v)>0?'+':''}${num(v,2)} %` : '—';
   const cls = v => Number(v)>0?'up':Number(v)<0?'down':'flat';
-  const date = v => v ? new Date(v).toLocaleDateString('cs-CZ') : '—';
-  const dateTime = v => v ? new Date(v).toLocaleString('cs-CZ',{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
+  const date = v => v ? new Date(v).toLocaleDateString(window.MTI18n.locale()) : '—';
+  const dateTime = v => v ? new Date(v).toLocaleString(window.MTI18n.locale(),{day:'numeric',month:'numeric',hour:'2-digit',minute:'2-digit'}) : '—';
   const rel = v => ok(v) ? `${num(Number(v),2)}×` : '—';
   const signalClass = s => s>=75?'high':s>=50?'mid':'';
   const rvolHint = s => ({same_time:'proti průměru ve stejný čas',estimated:'odhad podle průběhu seance',full_day:'proti celodennímu průměru',premarket:'k dispozici po otevření trhu'}[s?.rvol_basis]||'relativní objem není dostupný');
@@ -190,7 +192,7 @@
     if(shown.length<2){$('#chartMeta').textContent=interval==='D'?'Denní historie není dostupná':'Minutová historie se připravuje po nasazení';renderChart(state.detailBars);return;}
     if(!window.klinecharts){$('#chartMeta').textContent='Grafová knihovna se nenačetla – zobrazuji základní graf';renderChart(state.detailBars);return;}
     try{
-      const theme=chartStyles();box.style.background=theme.bg;window.klinecharts.registerLocale('cs-CZ',{time:'Čas',open:'Otevření',high:'Maximum',low:'Minimum',close:'Zavření',volume:'Objem',change:'Změna',turnover:'Obrat'});const chart=window.klinecharts.init(box);if(!chart)throw new Error('Graf nelze inicializovat');state.chart=chart;chart.setLocale('cs-CZ');chart.setTimezone('Europe/Prague');chart.setStyles(theme.styles);const last=shown.at(-1)?.close||0;chart.setPriceVolumePrecision(last<1?4:2,0);const indicator=state.chartIndicator,hasLongMa=shown.length>=200;if(indicator==='MA100_200'){if(hasLongMa)chart.createIndicator({name:'MA',shortName:'MA',calcParams:[100,200]},false,{id:'candle_pane'});chart.createIndicator('VOL',false,{height:125,minHeight:80});}else if(indicator){if(['MA','EMA','BOLL'].includes(indicator))chart.createIndicator(indicator,false,{id:'candle_pane'});else chart.createIndicator(indicator,false,{height:125,minHeight:80});}chart.applyNewData(shown);chart.scrollToRealTime();const intervalLabel=interval==='D'?'1D':interval==='60'?'1h':interval+'m',maUnit=interval==='D'?'dnů':interval==='60'?'hodin':`svíček po ${interval} min`;const indicatorNote=indicator==='MA100_200'?(hasLongMa?` · MA 100/200 ${maUnit} + objem`:` · MA 100/200 čeká na historii (${shown.length}/200)`):'';$('#chartMeta').textContent=`${shown.length} svíček · interval ${intervalLabel}${indicatorNote} · čas Praha · data přibližně 15 min zpožděná`;
+      const theme=chartStyles();box.style.background=theme.bg;window.klinecharts.registerLocale('cs-CZ',{time:'Čas',open:'Otevření',high:'Maximum',low:'Minimum',close:'Zavření',volume:'Objem',change:'Změna',turnover:'Obrat'});const chart=window.klinecharts.init(box);if(!chart)throw new Error('Graf nelze inicializovat');state.chart=chart;chart.setLocale(window.MTI18n.lang()==='en'?'en-US':'cs-CZ');chart.setTimezone('Europe/Prague');chart.setStyles(theme.styles);const last=shown.at(-1)?.close||0;chart.setPriceVolumePrecision(last<1?4:2,0);const indicator=state.chartIndicator,hasLongMa=shown.length>=200;if(indicator==='MA100_200'){if(hasLongMa)chart.createIndicator({name:'MA',shortName:'MA',calcParams:[100,200]},false,{id:'candle_pane'});chart.createIndicator('VOL',false,{height:125,minHeight:80});}else if(indicator){if(['MA','EMA','BOLL'].includes(indicator))chart.createIndicator(indicator,false,{id:'candle_pane'});else chart.createIndicator(indicator,false,{height:125,minHeight:80});}chart.applyNewData(shown);chart.scrollToRealTime();const intervalLabel=interval==='D'?'1D':interval==='60'?'1h':interval+'m',maUnit=interval==='D'?'dnů':interval==='60'?'hodin':`svíček po ${interval} min`;const indicatorNote=indicator==='MA100_200'?(hasLongMa?` · MA 100/200 ${maUnit} + objem`:` · MA 100/200 čeká na historii (${shown.length}/200)`):'';$('#chartMeta').textContent=`${shown.length} svíček · interval ${intervalLabel}${indicatorNote} · čas Praha · data přibližně 15 min zpožděná`;
     }catch(e){console.error('KLineChart:',e);state.chart=null;$('#chartMeta').textContent='Pokročilý graf se nepodařilo vykreslit';renderChart(state.detailBars);}
   }
   function renderChart(rows){
@@ -199,7 +201,8 @@
     const grid=[0,.25,.5,.75,1].map(x=>`<line x1="${p}" y1="${p+x*(h-p*2)}" x2="${w-p}" y2="${p+x*(h-p*2)}" stroke="var(--line)" stroke-width="1"/><text x="${w-p}" y="${p+x*(h-p*2)-5}" text-anchor="end" fill="var(--muted)" font-size="11">${money(max-x*range)}</text>`).join('');
     $('#priceChart').innerHTML=`<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Cenový graf"><defs><linearGradient id="fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${color}" stop-opacity=".28"/><stop offset="1" stop-color="${color}" stop-opacity="0"/></linearGradient></defs>${grid}<polygon points="${p},${h-p} ${pts} ${w-p},${h-p}" fill="url(#fill)"/><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="3" vector-effect="non-scaling-stroke"/></svg>`;
   }
-  $('#chartIntervals').addEventListener('click',e=>{const b=e.target.closest('[data-interval]');if(!b||!state.selected)return;state.chartInterval=b.dataset.interval;$$('#chartIntervals button').forEach(x=>x.classList.toggle('active',x===b));renderMarketChart(state.selected);});
+  $('#chartIntervals').addEventListener('click',e=>{const b=e.target.closest('[data-interval]');if(!b||!state.selected)return;state.chartInterval=b.dataset.interval;STORE.set('mt_chart_interval',state.chartInterval);$$('#chartIntervals button').forEach(x=>x.classList.toggle('active',x===b));renderMarketChart(state.selected);});
+  $$('#chartIntervals button').forEach(b=>b.classList.toggle('active',b.dataset.interval===state.chartInterval));
   $('#chartIndicator').value=state.chartIndicator;$('#chartIndicator').addEventListener('change',e=>{state.chartIndicator=e.target.value;STORE.set('mt_chart_indicator',state.chartIndicator);if(state.selected)renderMarketChart(state.selected);});
   $('#expandChart').addEventListener('click',()=>{const panel=$('#chartPanel'),on=!panel.classList.contains('fullscreen');panel.classList.toggle('fullscreen',on);$('#expandChart').setAttribute('aria-expanded',String(on));$('#expandChart').textContent=on?'✕ Zavřít celý graf':'⛶ Celá obrazovka';document.body.style.overflow=on?'hidden':'';setTimeout(()=>window.dispatchEvent(new Event('resize')),60);});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&$('#chartPanel').classList.contains('fullscreen'))$('#expandChart').click();});

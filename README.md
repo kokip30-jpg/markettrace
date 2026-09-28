@@ -51,3 +51,5 @@ Ceny a grafy se v pracovní dny obnovují každých 5 minut. SEC, 13F a fundamen
 Portfolio a watchlist se ukládají pouze do prohlížeče návštěvníka. Portfolio lze exportovat a znovu importovat jako JSON.
 
 Sledovaný seznam zahrnuje 100 likvidních titulů: velké technologie, čipy, AI, krypto těžaře a treasury společnosti, růstové akcie, letectví a novou energetiku. Další ticker stačí přidat do `config.json`.
+
+Rozhraní lze v horní liště přepnout mezi češtinou a angličtinou. Volba se ukládá do prohlížeče a po přihlášení také k uživatelskému účtu.
