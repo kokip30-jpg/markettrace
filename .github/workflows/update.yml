@@ -41,6 +41,9 @@ jobs:
         with:
           python-version: '3.12'
 
+      - name: Ověřit českou a anglickou verzi rozhraní
+        run: node --test tests/*.test.cjs
+
       - name: Stáhnout data
         env:
           ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
