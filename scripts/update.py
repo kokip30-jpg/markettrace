@@ -175,7 +175,12 @@ def macro_page(url, source, kind, keywords, limit=8):
 def update_macro(meta):
     """Krátký public-source přehled; zachová poslední funkční feed při výpadku zdroje."""
     old = load('macro.json', {})
-    if meta.get('macro_at', '')[:10] == TODAY.isoformat() and old.get('items'):
+    try:
+        macro_at = datetime.fromisoformat(str(meta.get('macro_at', '')).replace('Z', '+00:00'))
+    except ValueError:
+        macro_at = datetime.min.replace(tzinfo=timezone.utc)
+    macro_every = timedelta(hours=2 if NOW.weekday() < 5 else 4)
+    if old.get('items') and NOW - macro_at < macro_every:
         return
     items = macro_rss('https://www.federalreserve.gov/feeds/press_all.xml', 'Fed', 'fed',
                       keywords=('fomc', 'monetary policy', 'interest rate', 'economic', 'financial stability'))
