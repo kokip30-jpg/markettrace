@@ -44,4 +44,6 @@ test('alert rules and screener settings are validated',async()=>{
   assert.equal(valid('mt_alerts',[{t:'NVDA',type:'score',dir:'sideways',v:70}]),false);
   assert.equal(valid('mt_decision_log_v1',[{id:'1',ticker:'NVDA',type:'buy',note:'Průraz nad MA 200',at:'2026-09-29T04:00:00.000Z'}]),true);
   assert.equal(valid('mt_decision_log_v1',[{id:'1',ticker:'NVDA',type:'hold',note:'x',at:'2026-09-29'}]),false);
+  assert.equal(valid('mt_trade_plans_v1',{NVDA:{entry:100,stop:90,target:130,thesis:'Trend drží',horizon:'Střednědobě',updated:'2026-09-29T04:00:00.000Z'}}),true);
+  assert.equal(valid('mt_portfolio_history_v1',[{date:'2026-09-29',value:1000,spy:600}]),true);
 });
