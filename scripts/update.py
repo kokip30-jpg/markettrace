@@ -130,7 +130,7 @@ def html_text(value):
     return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', value or '')).strip()
 
 
-def macro_rss(url, source, kind, limit=8):
+def macro_rss(url, source, kind, limit=8, keywords=()):
     raw = http(url, headers={'Accept': 'application/rss+xml, application/xml, text/xml'})
     if not raw:
         return []
@@ -144,7 +144,7 @@ def macro_rss(url, source, kind, limit=8):
         link = html_text(item.findtext('link'))
         date = html_text(item.findtext('pubDate') or item.findtext('date'))
         summary = html_text(item.findtext('description'))[:220]
-        if title and link:
+        if title and link and (not keywords or any(word in title.lower() for word in keywords)):
             out.append(clean({'source': source, 'kind': kind, 'title': title, 'url': link,
                               'date': date, 'summary': summary}))
     return out
@@ -177,7 +177,8 @@ def update_macro(meta):
     old = load('macro.json', {})
     if meta.get('macro_at', '')[:10] == TODAY.isoformat() and old.get('items'):
         return
-    items = macro_rss('https://www.federalreserve.gov/feeds/press_all.xml', 'Fed', 'fed')
+    items = macro_rss('https://www.federalreserve.gov/feeds/press_all.xml', 'Fed', 'fed',
+                      keywords=('fomc', 'monetary policy', 'interest rate', 'economic', 'financial stability'))
     items += macro_page('https://ustr.gov/about-us/policy-offices/press-office/press-releases', 'USTR', 'trade',
                         ('tariff', 'trade', 'duty', 'import', 'section 301', 'section 232'))
     items += macro_page('https://www.whitehouse.gov/presidential-actions/', 'White House', 'policy',
