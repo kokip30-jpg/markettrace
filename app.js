@@ -18,6 +18,7 @@
   };
   const cache = new Map();
   const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+  const tr = v => window.MTI18n?.text(v) || v;
   const ok = v => v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
   const money = v => { if(!ok(v)) return '—'; const d=Math.abs(v)<1?4:2, n=new Intl.NumberFormat(window.MTI18n.locale(),{minimumFractionDigits:d,maximumFractionDigits:d}).format(v); return window.MTI18n.lang()==='en' ? `$${n}` : `${n} $`; };
   const num = (v,d=2) => ok(v) ? new Intl.NumberFormat(window.MTI18n.locale(),{maximumFractionDigits:d,minimumFractionDigits:d}).format(v) : '—';
@@ -90,12 +91,12 @@
   function renderBrief(){
     const box=$('#marketBrief'),rows=state.market.filter(s=>ok(s.price));if(!box||!rows.length)return;
     const leaders=[...rows].sort((a,b)=>scoreStock(b)-scoreStock(a)).slice(0,3),down=[...rows].sort((a,b)=>(a.change||0)-(b.change||0))[0],watchSignals=rows.filter(s=>state.watch.includes(s.ticker)&&((s.rel_volume||0)>=1.5||Math.abs(s.change||0)>=2||scoreStock(s)>=70));
-    box.innerHTML=`<div class="brief-head"><div><p class="eyebrow">DNEŠNÍ RADAR</p><h2>Začít tady</h2></div><small>Seřazeno podle aktuálního MarketTrace skóre a aktivity</small></div><div class="brief-cards"><article><span>Nejzajímavější dnes</span>${leaders.map(s=>`<button data-open="${esc(s.ticker)}"><b>${esc(s.ticker)}</b><small class="${clsFor(s.ticker,s.change)}">${pct(s.change)} · ${scoreStock(s)}/100</small></button>`).join('')}</article><article><span>Rizikový pohyb</span><button data-open="${esc(down.ticker)}"><b>${esc(down.ticker)}</b><small class="down">${pct(down.change)} · zkontroluj zprávy a objem</small></button></article><article><span>Watchlist vyžaduje pozornost</span><b>${watchSignals.length}</b><small>${watchSignals.length?'titulů má dnes silnější signál':'bez výrazného signálu'}</small></article></div>`;
+    box.innerHTML=`<div class="brief-head"><div><p class="eyebrow">${tr('DNEŠNÍ RADAR')}</p><h2>${tr('Začít tady')}</h2></div><small>${tr('Seřazeno podle aktuálního MarketTrace skóre a aktivity')}</small></div><div class="brief-cards"><article><span>${tr('Nejzajímavější dnes')}</span>${leaders.map(s=>`<button data-open="${esc(s.ticker)}"><b>${esc(s.ticker)}</b><small class="${clsFor(s.ticker,s.change)}">${pct(s.change)} · ${scoreStock(s)}/100</small></button>`).join('')}</article><article><span>${tr('Rizikový pohyb')}</span><button data-open="${esc(down.ticker)}"><b>${esc(down.ticker)}</b><small class="down">${pct(down.change)} · ${tr('zkontroluj zprávy a objem')}</small></button></article><article><span>${tr('Watchlist vyžaduje pozornost')}</span><b>${watchSignals.length}</b><small>${tr(watchSignals.length?'titulů má dnes silnější signál':'bez výrazného signálu')}</small></article></div>`;
   }
   function renderAgenda(){
     const box=$('#watchAgenda');if(!box||!state.market.length)return;
     const picks=state.watch.map(t=>state.byTicker.get(t)).filter(Boolean).map(s=>({s,score:scoreStock(s),urgent:(s.rel_volume||0)>=1.5||Math.abs(s.change||0)>=2})).filter(x=>x.urgent||x.score>=65).sort((a,b)=>(Number(b.urgent)-Number(a.urgent))||b.score-a.score).slice(0,5);
-    box.innerHTML=picks.length?picks.map(({s,score})=>`<button class="compact-item agenda-item" data-open="${esc(s.ticker)}"><span class="badge ${Math.abs(s.change||0)>=2?'sell':'buy'}">${esc(s.ticker)}</span><div><b>${esc(s.name||s.ticker)}</b><small>${(s.rel_volume||0)>=1.5?`RVOL ${rel(s.rel_volume)} · `:''}skóre ${score}/100</small></div><strong class="${clsFor(s.ticker,s.change)}">${pct(s.change)}</strong></button>`).join(''):'<div class="empty-state">Ve watchlistu zatím není silný signál. Přidej titul nebo uprav skupiny.</div>';
+    box.innerHTML=picks.length?picks.map(({s,score})=>`<button class="compact-item agenda-item" data-open="${esc(s.ticker)}"><span class="badge ${Math.abs(s.change||0)>=2?'sell':'buy'}">${esc(s.ticker)}</span><div><b>${esc(s.name||s.ticker)}</b><small>${(s.rel_volume||0)>=1.5?`RVOL ${rel(s.rel_volume)} · `:''}${tr('skóre')} ${score}/100</small></div><strong class="${clsFor(s.ticker,s.change)}">${pct(s.change)}</strong></button>`).join(''):`<div class="empty-state">${tr('Ve watchlistu zatím není silný signál. Přidej titul nebo uprav skupiny.')}</div>`;
   }
   function filteredStocks(){
     const q=$('#stockSearch').value.trim().toLowerCase(), f=$('#stockFilter').value, sort=$('#stockSort').value;
@@ -148,7 +149,7 @@
   }
   function movingAverage(bars,n){const v=(bars||[]).slice(-n).map(r=>Number(r?.[4])).filter(Number.isFinite);return v.length===n?v.reduce((a,b)=>a+b,0)/n:null;}
   function renderTrendStatus(s,bars){const ma50=movingAverage(bars,50),ma100=movingAverage(bars,100),ma200=movingAverage(bars,200),price=Number(s.price),above50=ma50&&price>ma50,above200=ma200&&price>ma200;let label='Data pro trend se připravují',note='Pro spolehlivý dlouhodobý trend je potřeba více denní historie.',kind='neutral';if(ma200){if(above50&&above200&&ma50>=ma200){label='Silný růstový trend';note='Cena je nad MA 50 i MA 200; krátkodobý průměr je výše než dlouhodobý.';kind='up';}else if(above200){label='Korekce v růstovém trendu';note='Cena drží nad MA 200, ale krátkodobé momentum slábne.';kind='warn';}else if(!above200&&ma50<ma200){label='Riziko breakdownu';note='Cena i MA 50 jsou pod MA 200. Trend je zatím slabý.';kind='down';}else{label='Boční / nejasný trend';note='Klouzavé průměry nedávají jednotný směr.';kind='neutral';}}
-    $('#detailStats').insertAdjacentHTML('beforeend',`<div class="trend-status ${kind}"><span>Stav trendu</span><b>${label}</b><small>${note}</small><em>MA 50 ${money(ma50)} · MA 100 ${money(ma100)} · MA 200 ${money(ma200)}</em></div>`);
+    $('#detailStats').insertAdjacentHTML('beforeend',`<div class="trend-status ${kind}"><span>${tr('Stav trendu')}</span><b>${tr(label)}</b><small>${tr(note)}</small><em>MA 50 ${money(ma50)} · MA 100 ${money(ma100)} · MA 200 ${money(ma200)}</em></div>`);
   }
   function renderScoreExplain(s){
     const b=scoreBreakdown(s),rows=[['Trend',b.trend,25],['Momentum',b.momentum,20],['Objem',b.volume,20],['Smart money',b.smart,25],['Stabilita',b.stability,10]];
