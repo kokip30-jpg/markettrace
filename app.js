@@ -98,6 +98,10 @@
     const max=Math.max(1,...rows.map(s=>s.volume||0));
     box.innerHTML=rows.map(s=>{const change=Number(s.change)||0,size=Math.round(32+Math.sqrt((s.volume||0)/max)*68),tone=change>=2?'strong-up':change>0?'up':change<=-2?'strong-down':change<0?'down':'flat';return `<button class="heat-tile ${tone}" data-open="${esc(s.ticker)}" style="--size:${size}" title="${esc(s.name||s.ticker)} · ${pct(change)}"><b>${esc(s.ticker)}</b><span>${pct(change)}</span><small>${compact(s.volume)}</small></button>`;}).join('')||'<div class="empty-state">Tržní mapa se připravuje.</div>';
   }
+  async function renderMacroNews(){
+    const box=$('#macroNews');if(!box)return;
+    try{const feed=await data('macro.json',true),items=(feed.items||[]).slice(0,6);box.innerHTML=items.length?items.map(x=>`<a class="macro-item ${esc(x.kind||'') }" href="${esc(x.url||'#')}" target="_blank" rel="noopener noreferrer"><span>${esc(x.source||'')}</span><div><b>${esc(x.title||'')}</b><small>${date(x.date)||tr('datum neuveden')} · ${esc(x.summary||'')}</small></div><em>↗</em></a>`).join(''):`<div class="empty-state">${tr('Zatím nejsou dostupná žádná ověřená makro oznámení.')}</div>`;}catch{box.innerHTML=`<div class="empty-state">${tr('Makro přehled se právě připravuje.')}</div>`;}
+  }
   function renderAgenda(){
     const box=$('#watchAgenda');if(!box||!state.market.length)return;
     const picks=state.watch.map(t=>state.byTicker.get(t)).filter(Boolean).map(s=>({s,score:scoreStock(s),urgent:(s.rel_volume||0)>=1.5||Math.abs(s.change||0)>=2})).filter(x=>x.urgent||x.score>=65).sort((a,b)=>(Number(b.urgent)-Number(a.urgent))||b.score-a.score).slice(0,5);
@@ -334,7 +338,7 @@
 
   async function boot(){
     $('#portfolioDate').value=new Date().toISOString().slice(0,10);renderWatch();
-    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?'Poslední dostupná data':'Data připojena';$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderBrief();renderHeatmap();renderMetrics();renderAgenda();renderStocks();renderHighlights();renderPortfolio();renderAlerts();
+    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?'Poslední dostupná data':'Data připojena';$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderBrief();renderMacroNews();renderHeatmap();renderMetrics();renderAgenda();renderStocks();renderHighlights();renderPortfolio();renderAlerts();
     }catch(e){$('#feedStatus').className='feed-status error';$('#feedStatus b').textContent='Data nejsou dostupná';$('#stockRows').innerHTML='<tr><td colspan="8"><div class="empty-state">Tržní snapshot se právě připravuje. Zkus stránku obnovit za několik minut.</div></td></tr>';console.error(e);}
     applyRoute();
   }

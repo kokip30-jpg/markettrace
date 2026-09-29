@@ -125,6 +125,76 @@ def get_json(url):
         return None
 
 
+# ---------------------------------------------------------------- makro a obchodní politika
+def html_text(value):
+    return re.sub(r'\s+', ' ', re.sub(r'<[^>]+>', ' ', value or '')).strip()
+
+
+def macro_rss(url, source, kind, limit=8):
+    raw = http(url, headers={'Accept': 'application/rss+xml, application/xml, text/xml'})
+    if not raw:
+        return []
+    try:
+        root = strip_ns(ET.fromstring(raw))
+    except Exception:
+        return []
+    out = []
+    for item in root.findall('.//item')[:limit]:
+        title = html_text(item.findtext('title'))
+        link = html_text(item.findtext('link'))
+        date = html_text(item.findtext('pubDate') or item.findtext('date'))
+        summary = html_text(item.findtext('description'))[:220]
+        if title and link:
+            out.append(clean({'source': source, 'kind': kind, 'title': title, 'url': link,
+                              'date': date, 'summary': summary}))
+    return out
+
+
+def macro_page(url, source, kind, keywords, limit=8):
+    raw = http(url, headers={'Accept': 'text/html'})
+    if not raw:
+        return []
+    text = raw.decode('utf-8', 'replace')
+    out, seen = [], set()
+    for href, label in re.findall(r'<a[^>]+href=["\']([^"\']+)["\'][^>]*>(.*?)</a>', text, re.I | re.S):
+        title = html_text(label)
+        low = title.lower()
+        if len(title) < 24 or not any(word in low for word in keywords):
+            continue
+        link = urllib.parse.urljoin(url, href)
+        if link in seen or not link.startswith('https://'):
+            continue
+        seen.add(link)
+        out.append({'source': source, 'kind': kind, 'title': title[:240], 'url': link,
+                    'date': TODAY.isoformat(), 'summary': 'Oficiální oznámení; otevřít původní zdroj.'})
+        if len(out) >= limit:
+            break
+    return out
+
+
+def update_macro(meta):
+    """Krátký public-source přehled; zachová poslední funkční feed při výpadku zdroje."""
+    old = load('macro.json', {})
+    if meta.get('macro_at', '')[:10] == TODAY.isoformat() and old.get('items'):
+        return
+    items = macro_rss('https://www.federalreserve.gov/feeds/press_all.xml', 'Fed', 'fed')
+    items += macro_page('https://ustr.gov/about-us/policy-offices/press-office/press-releases', 'USTR', 'trade',
+                        ('tariff', 'trade', 'duty', 'import', 'section 301', 'section 232'))
+    items += macro_page('https://www.whitehouse.gov/presidential-actions/', 'White House', 'policy',
+                        ('tariff', 'trade', 'import', 'economic', 'supply chain'))
+    unique, seen = [], set()
+    for item in items:
+        key = item.get('url') or item.get('title')
+        if key in seen:
+            continue
+        seen.add(key); unique.append(item)
+    if unique:
+        save('macro.json', {'updated': NOW.isoformat(), 'items': unique[:18],
+                            'sources': ['Federal Reserve', 'USTR', 'White House']})
+        meta['macro_at'] = NOW.isoformat()
+        log('Makro zprávy:', len(unique))
+
+
 # ---------------------------------------------------------------- soubory
 def load(name, default):
     try:
@@ -1880,6 +1950,10 @@ def main():
             step()
         except Exception as e:
             log('CHYBA:', repr(e))
+    try:
+        update_macro(meta)
+    except Exception as e:
+        log('CHYBA makro zprávy:', repr(e))
 
     # Pětiminutový běh obnovuje jen ceny a grafy. SEC, 13F a fundamenty jsou
     # výrazně pomalejší a spouštějí se samostatným plným během.
