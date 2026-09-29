@@ -10,6 +10,15 @@ function valid(k,v) {
     case 'mt_chart_height': return Number.isFinite(v) && v>=300 && v<=900;
     case 'mt_chart_interval': return ['1','5','15','60','D'].includes(v);
     case 'mt_chart_indicator': return ['','VOL','MA100_200','MA','EMA','BOLL','MACD','RSI','KDJ','OBV'].includes(v);
+    case 'mt_screener_v1': return v && typeof v==='object' &&
+      ['all','unusual','strong-volume','gainers','losers','insider','high-score','near-high','watch','assets'].includes(v.filter) &&
+      ['volume','relative','change','score','yearPosition'].includes(v.sort);
+    case 'mt_alert_rules_v1': return v && typeof v==='object' &&
+      typeof v.enabled==='boolean' && typeof v.watchedOnly==='boolean' &&
+      Number.isFinite(v.move) && v.move>=1 && v.move<=25 &&
+      Number.isFinite(v.rvol) && v.rvol>=1 && v.rvol<=10 &&
+      Number.isFinite(v.insiderValue) && v.insiderValue>=0 && v.insiderValue<=1e9;
+    case 'mt_alert_seen_v1': return typeof v==='string' && !Number.isNaN(Date.parse(v));
     default: return false;
   }
 }
