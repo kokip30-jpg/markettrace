@@ -37,6 +37,17 @@
     'Pro tento titul nejsou v uloženém období dostupné insider obchody.':'No insider trades are available for this symbol in the saved period.','Nákup':'Buy','Prodej':'Sale','Plán 10b5-1':'10b5-1 plan','Skóre':'Score','Bez uvedeného plánu':'No plan disclosed','V aktuálním období není potvrzený nákup více různých insiderů stejné firmy.':'No confirmed purchases by multiple insiders at the same company are available in the current period.','Poslední':'Latest','Změna podílu':'Position change','Nový podíl':'New position',
     'Žádné aktuální pohyby neodpovídají filtru.':'No current moves match the filter.','Žádná hlášení neodpovídají filtru.':'No filings match the filter.','Přidej alespoň dva tickery pro porovnání.':'Add at least two symbols to compare.','52týdenní pozice':'52-week position','Růst tržeb':'Revenue growth','Čistá marže':'Net margin','anualizovaná':'annualized','posledních 252 dní':'last 252 days','Cíl analytiků':'Analyst target','Žádné':'None','Čistý dluh':'Net debt','dluh po odečtení hotovosti':'debt less cash','Otevření':'Open','Zavření':'Close','Čas':'Time','MarketTrace skóre':'MarketTrace score','Aktuální 13F':'Current 13F','Ukončená pozice':'Closed position','Nová':'New','Změna':'Change','Snížení':'Reduced','správci jsou':'managers are'
   })) en.set(key,value);
+  Object.assign(en, {
+    'Typ':'Type','Denní pohyb (%)':'Daily move (%)','RVOL (×)':'RVOL (×)','Skóre (0–100)':'Score (0–100)',
+    'Skupina sledování':'Watchlist group','Moje sledování':'My watchlist','Čekám na vstup':'Entry watch','Držím':'Holding','AI a čipy':'AI and semiconductors','Krypto':'Crypto',
+    'DNEŠNÍ RADAR':'TODAY’S RADAR','Začít tady':'Start here','Nejzajímavější dnes':'Most interesting today','Rizikový pohyb':'Risk move','Watchlist vyžaduje pozornost':'Watchlist needs attention',
+    'PLÁN SLEDOVÁNÍ':'WATCH PLAN','Co dnes otevřít':'What to open today','JAK ČÍST DATA':'HOW TO READ THE DATA','Rychlá orientace':'Quick orientation',
+    'Skóre je filtr trendu, objemu a veřejných hlášení — ne nákupní doporučení.':'The score filters trend, volume and public filings — it is not a buy recommendation.',
+    'RVOL porovnává objem se stejnou částí běžného obchodního dne.':'RVOL compares volume with the same part of a typical trading day.',
+    '13F potvrzuje pozice se zpožděním, proto nikdy není živým signálem.':'13F confirms holdings with a delay, so it is never a live signal.',
+    'MOJE POZNÁMKA':'MY NOTE','Teze, vstup a riziko':'Thesis, entry and risk','Soukromé nastavení':'Private settings','Uložit poznámku':'Save note',
+    'Poznámka uložena':'Note saved','Silný růstový trend':'Strong uptrend','Korekce v růstovém trendu':'Pullback in an uptrend','Riziko breakdownu':'Breakdown risk','Boční / nejasný trend':'Sideways / unclear trend','Stav trendu':'Trend status'
+  });
   const fragments = [
     ['proti průměru ve stejný čas','versus the same-time average'],['odhad podle průběhu seance','estimate based on session progress'],['proti celodennímu průměru','versus the full-day average'],['k dispozici po otevření trhu','available after the market opens'],['relativní objem není dostupný','relative volume is unavailable'],
     ['aktivita chytrých peněz','smart-money activity'],['cena blízko ročního maxima','price near its yearly high'],['zatím bez výrazného potvrzení','no strong confirmation yet'],['neobvyklý objem','unusual volume'],['silné momentum','strong momentum'],

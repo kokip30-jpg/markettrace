@@ -10,6 +10,9 @@ function valid(k,v) {
     case 'mt_chart_height': return Number.isFinite(v) && v>=300 && v<=900;
     case 'mt_chart_interval': return ['1','5','15','60','D'].includes(v);
     case 'mt_chart_indicator': return ['','VOL','MA100_200','MA','EMA','BOLL','MACD','RSI','KDJ','OBV'].includes(v);
+    case 'mt_watch_groups_v1': return v && typeof v==='object' && Object.keys(v).length<=500 && Object.entries(v).every(([ticker,group])=>symbol(ticker)&&typeof group==='string'&&group.length>0&&group.length<=40);
+    case 'mt_stock_notes_v1': return v && typeof v==='object' && Object.keys(v).length<=500 && Object.entries(v).every(([ticker,note])=>symbol(ticker)&&typeof note==='string'&&note.length<=1200);
+    case 'mt_alerts': return Array.isArray(v) && v.length<=100 && v.every(a=>a&&symbol(a.t)&&['price','rvol','move','score'].includes(a.type||'price')&&['above','below'].includes(a.dir)&&Number.isFinite(a.v)&&a.v>0);
     case 'mt_screener_v1': return v && typeof v==='object' &&
       ['all','unusual','strong-volume','gainers','losers','insider','high-score','near-high','watch','assets'].includes(v.filter) &&
       ['volume','relative','change','score','yearPosition'].includes(v.sort);

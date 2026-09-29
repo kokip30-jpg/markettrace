@@ -37,5 +37,9 @@ test('alert rules and screener settings are validated',async()=>{
  assert.equal(valid('mt_alert_rules_v1',{enabled:true,watchedOnly:true,move:3,rvol:2,insiderValue:100000}),true);
  assert.equal(valid('mt_alert_rules_v1',{enabled:true,watchedOnly:true,move:0,rvol:2,insiderValue:100000}),false);
  assert.equal(valid('mt_screener_v1',{filter:'unusual',sort:'relative'}),true);
- assert.equal(valid('mt_screener_v1',{filter:'anything',sort:'relative'}),false);
+  assert.equal(valid('mt_screener_v1',{filter:'anything',sort:'relative'}),false);
+  assert.equal(valid('mt_watch_groups_v1',{NVDA:'AI a čipy'}),true);
+  assert.equal(valid('mt_stock_notes_v1',{NVDA:'čekám na MA 200'}),true);
+  assert.equal(valid('mt_alerts',[{t:'NVDA',type:'score',dir:'above',v:70}]),true);
+  assert.equal(valid('mt_alerts',[{t:'NVDA',type:'score',dir:'sideways',v:70}]),false);
 });
