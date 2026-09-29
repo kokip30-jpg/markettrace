@@ -32,3 +32,10 @@ test('invalid data and unknown keys are rejected',async()=>{
  let writes=0;const p=new Preferences({storage:storage(),read:async()=>[{key:'mt_watch_v2',value:'broken'}],write:async()=>writes++});await p.init('a');
  p.set('mt_chart_interval','invalid');p.set('service_role','secret');assert.deepEqual(p.get('mt_watch_v2',[]),[]);assert.equal(writes,0);
 });
+test('alert rules and screener settings are validated',async()=>{
+ const {valid}=require('../src/preferences.cjs');
+ assert.equal(valid('mt_alert_rules_v1',{enabled:true,watchedOnly:true,move:3,rvol:2,insiderValue:100000}),true);
+ assert.equal(valid('mt_alert_rules_v1',{enabled:true,watchedOnly:true,move:0,rvol:2,insiderValue:100000}),false);
+ assert.equal(valid('mt_screener_v1',{filter:'unusual',sort:'relative'}),true);
+ assert.equal(valid('mt_screener_v1',{filter:'anything',sort:'relative'}),false);
+});
