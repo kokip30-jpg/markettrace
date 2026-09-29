@@ -72,6 +72,14 @@ jobs:
 
       - uses: actions/configure-pages@v5
 
+      - name: Označit nasazovanou verzi
+        run: |
+          python - <<'PY'
+          import json, os
+          with open('deployment.json', 'w', encoding='utf-8') as f:
+              json.dump({'revision': os.environ['GITHUB_SHA']}, f)
+          PY
+
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
@@ -88,4 +96,4 @@ jobs:
         uses: actions/deploy-pages@v4
 
       - name: Ověřit zveřejněný web
-        run: python scripts/validate_data.py --base-url "https://kokip30-jpg.github.io/markettrace/"
+        run: python scripts/validate_data.py --base-url "https://kokip30-jpg.github.io/markettrace/" --expected-revision "$GITHUB_SHA"
