@@ -201,6 +201,66 @@ def update_macro(meta):
         log('Makro zprávy:', len(unique))
 
 
+def nasdaq_json(url):
+    raw = http(url, headers={'User-Agent': 'Mozilla/5.0 (compatible; MarketTrace/1.0)',
+                             'Accept': 'application/json, text/plain, */*', 'Origin': 'https://www.nasdaq.com'})
+    try:
+        return json.loads(raw) if raw else {}
+    except ValueError:
+        return {}
+
+
+def update_earnings_calendar(meta, tickers):
+    """Veřejný sedmidenní kalendář výsledků pro sledované tituly."""
+    old = load('earnings.json', {})
+    if old.get('updated', '')[:10] == TODAY.isoformat():
+        return
+    wanted, items = set(tickers), []
+    for offset in range(8):
+        day = TODAY + timedelta(days=offset)
+        rows = ((nasdaq_json(f'https://api.nasdaq.com/api/calendar/earnings?date={day.isoformat()}').get('data') or {}).get('rows') or [])
+        for row in rows:
+            ticker = str(row.get('symbol') or '').upper()
+            if ticker in wanted:
+                items.append(clean({'ticker': ticker, 'name': row.get('name') or ticker,
+                                    'date': day.isoformat(), 'time': row.get('time') or row.get('timeOfDay'),
+                                    'estimate': row.get('epsForecast') or row.get('epsEstimate')}))
+    items.sort(key=lambda row: (row.get('date', ''), row.get('ticker', '')))
+    if items or not old.get('items'):
+        save('earnings.json', {'updated': NOW.isoformat(), 'items': items[:80], 'source': 'Nasdaq'})
+        meta['earnings_at'] = NOW.isoformat()
+        log('Kalendář výsledků:', len(items))
+    else:
+        log('Kalendář výsledků: zdroj bez dat, ponechána poslední verze')
+
+
+def update_company_news(meta, tickers):
+    """Krátký veřejný souhrn posledních firemních zpráv do detailu titulu."""
+    old = load('company-news.json', {})
+    if old.get('updated', '')[:10] == TODAY.isoformat():
+        return
+    items, seen = [], set()
+    for ticker in tickers[:48]:
+        if not time_left():
+            break
+        rows = ((nasdaq_json(f'https://api.nasdaq.com/api/v1/news/company-news?symbol={urllib.parse.quote(ticker)}&offset=0&limit=3').get('data') or {}).get('rows') or [])
+        for row in rows[:3]:
+            title = str(row.get('title') or '').strip()
+            url = row.get('url') or row.get('link')
+            key = url or f'{ticker}:{title}'
+            if title and key not in seen:
+                seen.add(key)
+                items.append(clean({'ticker': ticker, 'title': title[:260], 'url': url,
+                                    'date': row.get('created') or row.get('published') or row.get('date'),
+                                    'source': row.get('source') or 'Nasdaq'}))
+    if items or not old.get('items'):
+        save('company-news.json', {'updated': NOW.isoformat(), 'items': items[:180], 'source': 'Nasdaq'})
+        meta['company_news_at'] = NOW.isoformat()
+        log('Firemní zprávy:', len(items))
+    else:
+        log('Firemní zprávy: zdroj bez dat, ponechána poslední verze')
+
+
 # ---------------------------------------------------------------- soubory
 def load(name, default):
     try:
@@ -1960,6 +2020,12 @@ def main():
         update_macro(meta)
     except Exception as e:
         log('CHYBA makro zprávy:', repr(e))
+    if not MARKET_ONLY:
+        try:
+            update_earnings_calendar(meta, tickers)
+            update_company_news(meta, tickers)
+        except Exception as e:
+            log('CHYBA kalendář/zprávy:', repr(e))
 
     # Pětiminutový běh obnovuje jen ceny a grafy. SEC, 13F a fundamenty jsou
     # výrazně pomalejší a spouštějí se samostatným plným během.
