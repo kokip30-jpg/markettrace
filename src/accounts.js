@@ -18,7 +18,8 @@ $('#accountRetry').onclick=async()=>{if(!prefs.ready)location.reload();else awai
 $('#accountForm').onsubmit=async e=>{
   e.preventDefault();const submit=$('#accountSubmit');submit.disabled=true;$('#accountMessage').textContent='Přihlašuji…';
   const name=$('#accountName').value.trim().toLowerCase();
-  const email=name==='test'?'test@accounts.markettrace.invalid':name;
+  // Krátké jméno je interně samostatný účet; zadaný e-mail zůstává e-mailem.
+  const email=name.includes('@')?name:`${name}@accounts.markettrace.invalid`;
   try {
     const {error}=await client.auth.signInWithPassword({email,password:$('#accountPassword').value});
     if(error)throw error;
@@ -39,7 +40,8 @@ async function init(){
     await prefs.init(user?.id||null);
     $('#accountBtn').textContent=user?'Můj účet':'Přihlásit';
     $('#accountForm').hidden=!!user;$('#accountLogout').hidden=!user;
-    $('#accountIdentity').textContent=user?(user.email==='test@accounts.markettrace.invalid'?'Účet: test':'Účet: '+user.email):'Přihlas se a ukládej nastavení do svého účtu.';
+    const username=user?.email?.endsWith('@accounts.markettrace.invalid')?user.email.split('@')[0]:user?.email;
+    $('#accountIdentity').textContent=user?'Účet: '+username:'Přihlas se a ukládej nastavení do svého účtu.';
     if(!user)status('Bez přihlášení · pouze tento prohlížeč');
     $('#accountRetry').hidden=!user;
     client.auth.onAuthStateChange((event,session)=>{
