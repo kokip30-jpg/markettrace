@@ -41,7 +41,7 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Ověřit českou a anglickou verzi rozhraní
+      - name: Ověřit všechny jazykové verze rozhraní
         run: node --test tests/*.test.cjs
 
       - name: Stáhnout data
