@@ -52,13 +52,18 @@
   $$('[data-jump]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.jump)));
   $('#backBtn').addEventListener('click',()=>setView('overview'));
 
-  const watchGroup=t=>state.watchGroups[t]||'Moje sledování';
+  const watchGroup=t=>{
+    const group=state.watchGroups[t];
+    // Starší verze ukládala výchozí název už v angličtině. Nezobrazuj ho pak
+    // v italské/francouzské verzi jako cizí zbytek nastavení.
+    return !group || ['Moje sledování','MY WATCHLIST','My watchlist'].includes(group) ? tr('Moje sledování') : group;
+  };
   function saveWatch(){ state.watch=[...new Set(state.watch)]; for(const t of Object.keys(state.watchGroups))if(!state.watch.includes(t))delete state.watchGroups[t]; STORE.set('mt_watch_v2',state.watch);STORE.set('mt_watch_groups_v1',state.watchGroups); renderWatch(); renderStocks(); renderMetrics(); renderAgenda(); }
   function toggleWatch(ticker){ ticker=ticker.toUpperCase(); const i=state.watch.indexOf(ticker); if(i>=0){state.watch.splice(i,1);toast(`${ticker} odebrána ze sledovaných`);}else{state.watch.push(ticker);state.watchGroups[ticker]='Moje sledování';toast(`${ticker} přidána do sledovaných`);} saveWatch(); if(state.selected===ticker) renderDetailWatch(); }
   function renderWatch(){
     const box=$('#watchlist'); if(!state.watch.length){box.innerHTML='<div class="empty-state">Watchlist je prázdný.</div>';return;}
     const groups={};for(const t of state.watch)(groups[watchGroup(t)]??=[]).push(t);
-    box.innerHTML=Object.entries(groups).map(([group,tickers])=>`<section class="watch-group"><h4>${esc(group)} <small>${tickers.length}</small></h4>${tickers.map(t=>{const s=state.byTicker.get(t);return `<div class="watch-row"><button class="open-stock" data-open="${esc(t)}"><b>${esc(t)}</b><small>${esc(s?.name||'Čekám na data')}</small></button><div class="quote-mini"><b>${money(s?.price)}</b><span class="${clsFor(t,s?.change)}">${pct(s?.change)}</span></div><button class="remove-watch" data-unwatch="${esc(t)}" aria-label="Odebrat ${esc(t)}">×</button></div>`;}).join('')}</section>`).join('');
+    box.innerHTML=Object.entries(groups).map(([group,tickers])=>`<section class="watch-group"><h4>${esc(group)} <small>${tickers.length}</small></h4>${tickers.map(t=>{const s=state.byTicker.get(t);return `<div class="watch-row"><button class="open-stock" data-open="${esc(t)}"><b>${esc(t)}</b><small>${esc(tr(s?.name||'Čekám na data'))}</small></button><div class="quote-mini"><b>${money(s?.price)}</b><span class="${clsFor(t,s?.change)}">${pct(s?.change)}</span></div><button class="remove-watch" data-unwatch="${esc(t)}" aria-label="${esc(tr('Odebrat'))} ${esc(t)}">×</button></div>`;}).join('')}</section>`).join('');
   }
   $('#addWatchBtn').addEventListener('click',()=>{const s=$('#sideSearch');s.hidden=!s.hidden;if(!s.hidden)$('#watchInput').focus();});
   function addWatchInput(){const t=$('#watchInput').value.trim().toUpperCase().replace(/[^A-Z0-9.\-]/g,''),group=$('#watchGroupInput').value;if(!t)return;if(!state.byTicker.has(t)){toast('Tento ticker zatím není v tržním přehledu');return;}if(!state.watch.includes(t))state.watch.push(t);state.watchGroups[t]=group;$('#watchInput').value='';saveWatch();}
@@ -168,7 +173,7 @@
   }
   function renderScoreExplain(s){
     const b=scoreBreakdown(s),rows=[['Trend',b.trend,25],['Momentum',b.momentum,20],['Objem',b.volume,20],['Smart money',b.smart,25],['Stabilita',b.stability,10]];
-    $('#scoreExplain').innerHTML=`<div class="panel-head"><div><p class="eyebrow">VYSVĚTLITELNÉ SKÓRE</p><h2>${esc(scoreVerdict(s))}</h2></div><span class="score-ring ${signalClass(b.total)}">${b.total}</span></div><div class="score-breakdown">${rows.map(([label,value,max])=>`<div class="score-part"><div><span>${label}</span><b>${value}/${max}</b></div><i><em style="--w:${value/max*100}%"></em></i></div>`).join('')}</div><p class="score-note">Skóre kombinuje trend, dnešní momentum, časově srovnatelný objem a aktuální veřejná hlášení SEC/13F. Chybějící RVOL dostává neutrální hodnotu. Není to doporučení k nákupu.</p>`;
+    $('#scoreExplain').innerHTML=`<div class="panel-head"><div><p class="eyebrow">${tr('VYSVĚTLITELNÉ SKÓRE')}</p><h2>${esc(tr(scoreVerdict(s)))}</h2></div><span class="score-ring ${signalClass(b.total)}">${b.total}</span></div><div class="score-breakdown">${rows.map(([label,value,max])=>`<div class="score-part"><div><span>${tr(label)}</span><b>${value}/${max}</b></div><i><em style="--w:${value/max*100}%"></em></i></div>`).join('')}</div><p class="score-note">${tr('Skóre kombinuje trend, dnešní momentum, časově srovnatelný objem a aktuální veřejná hlášení SEC/13F. Chybějící RVOL dostává neutrální hodnotu. Není to doporučení k nákupu.')}</p>`;
   }
   function renderEvents(s,trades,bars,filings=[],news=[]){
     const events=[];const rv=Number(s.rel_volume)||0,yp=yearPosition(s),ch=Number(s.change)||0;
@@ -214,7 +219,7 @@
     const perf=n=>recent.length>n&&Number(recent.at(-1)?.[4])&&Number(recent.at(-1-n)?.[4])?Number(recent.at(-1)[4])/Number(recent.at(-1-n)[4])-1:null,riskPoints=(Number(annualVol)>.5?3:Number(annualVol)>.3?2:1)+(maxDd<-.4?3:maxDd<-.2?2:1)+(Number(beta)>1.5?2:Number(beta)>1?1:0),label=riskPoints>=7?'Vysoké':riskPoints>=4?'Zvýšené':'Mírné';
     $('#riskPanel').innerHTML=`<div class="panel-head"><div><p class="eyebrow">RIZIKOVÝ PANEL</p><h2>Kolísání a propady</h2></div><span class="risk-label ${riskPoints>=7?'danger':riskPoints>=4?'warn':'safe'}">${label}</span></div><div class="valuation-grid risk-grid"><div><span>Volatilita</span><b>${ratioPct(annualVol)}</b><small>roční přepočet</small></div><div><span>Max. propad</span><b class="down">${ratioPct(maxDd)}</b><small>z vrcholu za rok</small></div><div><span>Beta vs. SPY</span><b>${ok(beta)?num(beta,2):'—'}</b><small>${Number(beta)>1?'kolísá více než trh':'vůči trhu'}</small></div><div><span>ATR (14)</span><b>${money(atr)}</b><small>${ratioPct(atrPct)} denní ceny</small></div><div><span>Výnos 1 měsíc</span><b class="${cls(perf(21))}">${ratioPct(perf(21))}</b><small>21 obchodních dní</small></div><div><span>Výnos 1 rok</span><b class="${cls(perf(252))}">${ratioPct(perf(252))}</b><small>252 obchodních dní</small></div></div><p class="score-note">Beta a volatilita jsou počítané z denních zavíracích cen. Minulý pohyb nezaručuje budoucí výsledek.</p>`;
   }
-  function renderDetailWatch(){const b=$('#detailWatch'),on=state.watch.includes(state.selected);b.textContent=on?'★':'☆';b.classList.toggle('on',on);b.setAttribute('aria-label',`${on?'Odebrat':'Přidat'} ${state.selected||''}`);}
+  function renderDetailWatch(){const b=$('#detailWatch'),on=state.watch.includes(state.selected);b.textContent=on?'★':'☆';b.classList.toggle('on',on);b.setAttribute('aria-label',`${tr(on?'Odebrat':'Přidat')} ${state.selected||''}`);}
   $('#detailWatch').addEventListener('click',()=>state.selected&&toggleWatch(state.selected));
   function aggregateIntraday(rows,minutes){
     const step=minutes*60000,buckets=new Map();

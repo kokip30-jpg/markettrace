@@ -24,7 +24,16 @@ $('#accountForm').onsubmit=async e=>{
     const {error}=await client.auth.signInWithPassword({email,password:$('#accountPassword').value});
     if(error)throw error;
     $('#accountPassword').value='';location.reload();
-  } catch {$('#accountMessage').textContent='Přihlášení se nezdařilo. Zkontroluj údaje a připojení.';}
+  } catch (err) {
+    // Supabase schválně nesděluje, zda neexistuje účet nebo nesedí heslo.
+    // Rozlišíme jen chybný údaj od nedostupného spojení, bez úniku detailů účtu.
+    const message=String(err?.message||'').toLowerCase();
+    $('#accountMessage').textContent=message.includes('invalid login credentials')
+      ? 'Přihlášení se nezdařilo. Zkontroluj přihlašovací jméno a heslo.'
+      : message.includes('fetch') || message.includes('network') || message.includes('timeout')
+        ? 'Přihlášení se nezdařilo kvůli spojení. Zkus to prosím znovu.'
+        : 'Přihlášení se nezdařilo. Zkontroluj údaje a připojení.';
+  }
   finally{submit.disabled=false;}
 };
 $('#accountLogout').onclick=async()=>{
