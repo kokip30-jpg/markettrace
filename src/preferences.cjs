@@ -6,7 +6,7 @@ function valid(k,v) {
     case 'mt_compare_v1': return Array.isArray(v) && v.length<=4 && v.every(symbol);
     case 'mt_port_v2': return Array.isArray(v) && v.length<=5000 && v.every(x=>x && symbol(x.ticker) && Number.isFinite(x.qty) && x.qty>0 && Number.isFinite(x.price) && x.price>0 && typeof x.id==='string' && typeof x.date==='string');
     case 'mt_theme': return ['dark','light'].includes(v);
-    case 'mt_language': return ['cs','en'].includes(v);
+    case 'mt_language': return ['cs','en','de','it','fr'].includes(v);
     case 'mt_chart_height': return Number.isFinite(v) && v>=300 && v<=900;
     case 'mt_chart_interval': return ['1','5','15','60','D'].includes(v);
     case 'mt_chart_indicator': return ['','VOL','MA100_200','MA','EMA','BOLL','MACD','RSI','KDJ','OBV'].includes(v);
