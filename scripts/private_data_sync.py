@@ -36,7 +36,10 @@ def upload(root: Path):
     for group in chunks(paths):
         signed = api("sign", {"paths": group})["uploads"]
         for path in group:
-            request = urllib.request.Request(signed[path], data=(root / path).read_bytes(), method="PUT",
+            url = signed[path]
+            if url.startswith("/"):
+                url = "https://rftgfskqvyhdgirhwmvm.supabase.co/storage/v1" + url
+            request = urllib.request.Request(url, data=(root / path).read_bytes(), method="PUT",
                 headers={"Content-Type": "application/json", "x-upsert": "true"})
             with urllib.request.urlopen(request, timeout=120): pass
     print(f"Private Supabase storage updated: {len(paths)} files")

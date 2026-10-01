@@ -34,7 +34,9 @@ Deno.serve(async (req) => {
       for (const path of paths) {
         const { data, error } = await admin.storage.from(bucket).createSignedUploadUrl(path, { upsert: true });
         if (error || !data) throw error || new Error("Could not sign upload");
-        uploads[path] = `${Deno.env.get("SUPABASE_URL")}/storage/v1${data.signedUrl}`;
+        // Storage currently returns an absolute upload URL. Keep the SDK output
+        // intact; older SDK responses are normalized by the Action client.
+        uploads[path] = data.signedUrl;
       }
       return Response.json({ uploads });
     }
