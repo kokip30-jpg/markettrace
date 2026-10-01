@@ -16,7 +16,9 @@
     const k = name + bucket();
     if(k in cache) return cache[k];
     try{
-      const r = await fetch(`data/${name}?v=${bucket()}`, {cache: 'no-cache'});
+      const {data:{session}}=await window.MTAccounts.client.auth.getSession();
+      if(!session?.access_token) return cache[k]=null;
+      const r = await fetch(`https://rftgfskqvyhdgirhwmvm.supabase.co/functions/v1/market-data?path=${encodeURIComponent(name)}&v=${bucket()}`, {cache:'no-cache',headers:{apikey:'sb_publishable_wFJUnq_itAff-rfnlORGWQ_7zIOVr8V',Authorization:`Bearer ${session.access_token}`}});
       return cache[k] = r.ok ? await r.json() : null;
     }catch{ return cache[k] = null; }
   }

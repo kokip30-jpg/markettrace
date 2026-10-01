@@ -6,6 +6,7 @@ import os
 import re
 import sys
 import time
+import urllib.error
 import urllib.request
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -94,17 +95,16 @@ def validate_remote(base):
         try:
             index = fetch_text(base, f'?smoke={int(time.time())}')
             config = fetch_json(base, f'config.json?smoke={int(time.time())}')
-            market = fetch_json(base, f'data/market.json?smoke={int(time.time())}')
-            meta = fetch_json(base, f'data/meta.json?smoke={int(time.time())}')
-            bmnr = fetch_json(base, f'data/hourly/BMNR.json?smoke={int(time.time())}')
             debug = fetch_json(base, f'data/debug.json?smoke={int(time.time())}')
             require(expected_app_url in index,
                     f'produkce ještě nemá aktuální {expected_app_url}')
             require('admin@masaze-tisnov.cz' not in json.dumps([config, debug]).lower(), 'produkce zveřejňuje osobní e-mail')
-            require(len(market.get('symbols', [])) >= 120, 'produkční market.json je neúplný')
-            require(meta.get('market_at') or market.get('updated'), 'chybí čas aktualizace cen')
-            validate_bars(bmnr, 'produkční hourly/BMNR', 200)
-            print(f'OK produkce: {len(market.get("symbols", []))} symbolů, BMNR {len(bmnr)} hodinových svíček')
+            try:
+                fetch_json(base, f'data/market.json?smoke={int(time.time())}')
+                raise RuntimeError('produkce stále zveřejňuje market.json bez přihlášení')
+            except urllib.error.HTTPError as hidden:
+                require(hidden.code in (403,404), f'public data: HTTP {hidden.code}')
+            print('OK produkce: veřejný artefakt neobsahuje tržní data')
             return
         except Exception as exc:
             last_error = exc

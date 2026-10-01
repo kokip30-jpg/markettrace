@@ -5,6 +5,7 @@
   let STORE;
   try { STORE = await window.MTAccounts.ready; }
   catch { return; }
+  if (!STORE) return;
   const accountLanguage=STORE.get('mt_language',window.MTI18n.lang());
   if(accountLanguage!==window.MTI18n.lang()){window.MTI18n.set(accountLanguage);location.reload();return;}
   const languageSelect=$('#languageSelect');languageSelect.value=window.MTI18n.lang();languageSelect.addEventListener('change',async()=>{STORE.set('mt_language',languageSelect.value);window.MTI18n.set(languageSelect.value);await STORE.flush?.();location.reload();});
@@ -35,8 +36,13 @@
   const toast = text => { const el=$('#toast'); el.textContent=text; el.classList.add('show'); clearTimeout(toast.t); toast.t=setTimeout(()=>el.classList.remove('show'),2200); };
   async function data(name, fresh = false) {
     if (!fresh && cache.has(name)) return cache.get(name);
-    const url = `data/${name}?v=${Math.floor(Date.now()/300000)}`;
-    const p = fetch(url,{cache:'no-cache'}).then(r => { if(!r.ok) throw new Error(`${name}: ${r.status}`); return r.json(); });
+    const {data:{session}}=await window.MTAccounts.client.auth.getSession();
+    if(!session?.access_token) throw new Error('Přihlášení vypršelo');
+    const url=`https://rftgfskqvyhdgirhwmvm.supabase.co/functions/v1/market-data?path=${encodeURIComponent(name)}&v=${Math.floor(Date.now()/300000)}`;
+    const p=fetch(url,{cache:'no-cache',headers:{
+      apikey:'sb_publishable_wFJUnq_itAff-rfnlORGWQ_7zIOVr8V',
+      Authorization:`Bearer ${session.access_token}`
+    }}).then(r => { if(!r.ok) throw new Error(`${name}: ${r.status}`); return r.json(); });
     cache.set(name,p); try { return await p; } catch(e) { cache.delete(name); throw e; }
   }
 

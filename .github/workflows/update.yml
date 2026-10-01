@@ -30,12 +30,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Načíst uložená data (větev data)
+      - name: Načíst chráněný snapshot
         run: |
-          if git fetch -q --depth=1 origin data; then
+          mkdir -p data
+          if ! python scripts/private_data_sync.py download data; then
+            echo "První zabezpečené nasazení: jednorázově načítám původní snapshot."
+            git fetch -q --depth=1 origin data
             rm -rf data && git archive FETCH_HEAD data | tar -x
           fi
-          mkdir -p data
 
       - uses: actions/setup-python@v5
         with:
@@ -60,25 +62,34 @@ jobs:
       - name: Ověřit úplnost dat
         run: python scripts/validate_data.py
 
-      - name: Uložit data (větev data, jen poslední verze)
+      - name: Uložit data do privátního úložiště
+        run: python scripts/private_data_sync.py upload data
+
+      - name: Odstranit veřejný snapshot z větve data
         env:
           TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
         run: |
           tmp=$(mktemp -d)
-          cp -r data "$tmp/"
           cd "$tmp"
           git init -q -b data
-          git add data
-          git -c user.name="markettrace-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Data $(date -u +'%Y-%m-%d %H:%M') UTC"
+          printf 'MarketTrace data are served only to authenticated users.\n' > README.md
+          git add README.md
+          git -c user.name="markettrace-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Retire public market snapshots"
           git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" data
 
       - uses: actions/configure-pages@v5
 
 
+      - name: Připravit neveřejný artefakt pro Pages
+        run: |
+          site=$(mktemp -d)
+          rsync -a --delete --exclude data --exclude .git ./ "$site/"
+          echo "PAGES_SITE=$site" >> "$GITHUB_ENV"
+
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: .
+          path: ${{ env.PAGES_SITE }}
 
       - id: deploy
         uses: actions/deploy-pages@v4

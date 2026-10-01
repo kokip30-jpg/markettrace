@@ -46,12 +46,24 @@ async function init(){
   try {
     const {data,error}=await client.auth.getSession();if(error)throw error;
     const user=data.session?.user;
+    // Market data are members-only. Do not initialise the application or any
+    // local preference state until a real Supabase session exists.
+    if(!user){
+      document.body.classList.remove('auth-pending');
+      document.body.classList.add('auth-required');
+      $('#accountBtn').textContent='Přihlásit';
+      $('#accountForm').hidden=false;$('#accountLogout').hidden=true;
+      $('#accountIdentity').textContent='Přihlas se pro přístup k MarketTrace.';
+      status('Přístup vyžaduje přihlášení');
+      dialog.showModal();
+      return null;
+    }
     await prefs.init(user?.id||null);
+    document.body.classList.remove('auth-pending','auth-required');
     $('#accountBtn').textContent=user?'Můj účet':'Přihlásit';
     $('#accountForm').hidden=!!user;$('#accountLogout').hidden=!user;
     const username=user?.email?.endsWith('@accounts.markettrace.invalid')?user.email.split('@')[0]:user?.email;
     $('#accountIdentity').textContent=user?'Účet: '+username:'Přihlas se a ukládej nastavení do svého účtu.';
-    if(!user)status('Bez přihlášení · pouze tento prohlížeč');
     $('#accountRetry').hidden=!user;
     client.auth.onAuthStateChange((event,session)=>{
       if(event!=='INITIAL_SESSION' && (session?.user?.id||null)!==(user?.id||null)) location.reload();
@@ -64,7 +76,7 @@ async function init(){
     throw new Error('Account preferences could not be loaded');
   }
 }
-window.MTAccounts={ready:init()};
+window.MTAccounts={ready:init(),client};
 window.addEventListener('online',()=>void prefs.flush());
 window.addEventListener('beforeunload',e=>{if(prefs.dirty()){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{if(prefs.dirty())void prefs.flush();},15000);
