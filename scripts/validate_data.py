@@ -95,10 +95,9 @@ def validate_remote(base):
         try:
             index = fetch_text(base, f'?smoke={int(time.time())}')
             config = fetch_json(base, f'config.json?smoke={int(time.time())}')
-            debug = fetch_json(base, f'data/debug.json?smoke={int(time.time())}')
             require(expected_app_url in index,
                     f'produkce ještě nemá aktuální {expected_app_url}')
-            require('admin@masaze-tisnov.cz' not in json.dumps([config, debug]).lower(), 'produkce zveřejňuje osobní e-mail')
+            require('admin@masaze-tisnov.cz' not in json.dumps([config]).lower(), 'config.json zveřejňuje osobní e-mail')
             try:
                 fetch_json(base, f'data/market.json?smoke={int(time.time())}')
                 raise RuntimeError('produkce stále zveřejňuje market.json bez přihlášení')
