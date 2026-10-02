@@ -37,7 +37,10 @@ $('#accountForm').onsubmit=async e=>{
   finally{submit.disabled=false;}
 };
 $('#accountLogout').onclick=async()=>{
-  if(!(await prefs.flush())){$('#accountMessage').textContent='Nejdřív ulož změny. Připojení k účtu teď nefunguje.';return;}
+  // Odhlášení nesmí zůstat uvězněné kvůli dočasně neuloženým změnám.
+  // Fronta zůstává bezpečně v tomto prohlížeči a zkusí se uložit po dalším přihlášení.
+  const saved=await prefs.flush();
+  if(!saved)$('#accountMessage').textContent='Změny se nyní nepodařilo uložit; odhlašuji bezpečně. Při dalším přihlášení se zkusí uložit znovu.';
   const {error}=await client.auth.signOut({scope:'local'});
   if(error){$('#accountMessage').textContent='Odhlášení se nezdařilo. Zkus to znovu.';return;}
   location.reload();
@@ -60,11 +63,11 @@ async function init(){
     }
     await prefs.init(user?.id||null);
     document.body.classList.remove('auth-pending','auth-required');
-    $('#accountBtn').textContent=user?'Můj účet':'Přihlásit';
-    $('#accountForm').hidden=!!user;$('#accountLogout').hidden=!user;
+    $('#accountBtn').textContent='Můj účet';
+    $('#accountForm').hidden=true;$('#accountLogout').hidden=false;
     const username=user?.email?.endsWith('@accounts.markettrace.invalid')?user.email.split('@')[0]:user?.email;
     $('#accountIdentity').textContent=user?'Účet: '+username:'Přihlas se a ukládej nastavení do svého účtu.';
-    $('#accountRetry').hidden=!user;
+    $('#accountRetry').hidden=false;
     client.auth.onAuthStateChange((event,session)=>{
       if(event!=='INITIAL_SESSION' && (session?.user?.id||null)!==(user?.id||null)) location.reload();
     });
