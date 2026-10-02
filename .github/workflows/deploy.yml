@@ -1,0 +1,37 @@
+name: Nasazení rozhraní
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: markettrace-pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ověřit rozhraní
+        run: node --test tests/*.test.cjs
+      - uses: actions/configure-pages@v5
+      - name: Připravit neveřejný artefakt pro Pages
+        run: |
+          site=$(mktemp -d)
+          rsync -a --delete --exclude data --exclude .git ./ "$site/"
+          echo "PAGES_SITE=$site" >> "$GITHUB_ENV"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: ${{ env.PAGES_SITE }}
+      - id: deploy
+        uses: actions/deploy-pages@v4
