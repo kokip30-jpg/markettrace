@@ -31,18 +31,21 @@ function valid(k,v) {
 }
 class Preferences {
   constructor({storage,read,write,status=()=>{}}) {
-    Object.assign(this,{storage,read,write,status}); this.user=null; this.values={}; this.pending={}; this.ready=false; this.running=null;
+    Object.assign(this,{storage,read,write,status}); this.user=null; this.values={}; this.pending={}; this.ready=false; this.hydrated=false; this.running=null;
   }
   async init(user) {
     this.user=user;
-    if(!user){this.ready=true;return;}
+    if(!user){this.ready=true;this.hydrated=true;return true;}
     // Never hydrate an account from a guest's local settings.
-    const rows=await this.read(user);
+    let rows=[];
+    try { rows=await this.read(user); }
+    catch { this.ready=true; this.hydrated=false; this.status('Účet je přihlášený, nastavení se načte při dalším spojení'); return false; }
     for(const r of rows) if(valid(r.key,r.value)) this.values[r.key]=r.value;
     try { const saved=JSON.parse(this.storage.getItem(this.queueKey())||'{}'); for(const [k,v] of Object.entries(saved)) if(valid(k,v)) this.pending[k]=v; } catch {}
-    Object.assign(this.values,this.pending); this.ready=true;
-    this.status(Object.keys(this.pending).length?'Čeká na uložení':'Uloženo v účtu');
+    Object.assign(this.values,this.pending); this.ready=true; this.hydrated=true;
+    this.status(Object.keys(this.pending).length?'Čeká na uložení':'Uloženo v účtu'); return true;
   }
+  async reload() { if(!this.user) return true; this.ready=false; this.hydrated=false; this.values={}; return this.init(this.user); }
   queueKey(){return 'mt_pending_v1:'+this.user;}
   get(k,d) {
     if(this.user) return structuredClone(this.values[k]??d);
@@ -53,11 +56,12 @@ class Preferences {
     if(!this.user){try{this.storage.setItem(k,JSON.stringify(v));}catch{this.status('Nastavení nelze uložit v prohlížeči');}return;}
     if(JSON.stringify(this.values[k])===JSON.stringify(v)) return;
     this.values[k]=structuredClone(v); this.pending[k]=structuredClone(v);
-    this.persist(); this.status('Ukládám…'); void this.flush();
+    this.persist(); this.status(this.hydrated?'Ukládám…':'Čeká na obnovení spojení'); if(this.hydrated) void this.flush();
   }
   persist(){try{this.storage.setItem(this.queueKey(),JSON.stringify(this.pending));}catch{this.status('Místní záloha není dostupná');}}
   async flush() {
     if(!this.user || !this.ready) return true;
+    if(!this.hydrated) return false;
     if(this.running) return this.running;
     this.running=(async()=>{
       try {

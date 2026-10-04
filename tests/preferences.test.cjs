@@ -20,9 +20,9 @@ test('edit during upload is saved after earlier value',async()=>{
  await p.init('a');p.set('mt_theme','light');p.set('mt_theme','dark');release();await p.flush();
  assert.deepEqual(calls,[{mt_theme:'light'},{mt_theme:'dark'}]);assert.equal(p.dirty(),false);
 });
-test('failed initial read cannot overwrite remote state',async()=>{
- let writes=0;const p=new Preferences({storage:storage(),read:async()=>{throw Error('offline');},write:async()=>writes++});
- await assert.rejects(p.init('a'));p.set('mt_watch_v2',[]);await p.flush();assert.equal(writes,0);
+test('failed initial read keeps the app usable but cannot overwrite remote state',async()=>{
+  let writes=0;const p=new Preferences({storage:storage(),read:async()=>{throw Error('offline');},write:async()=>writes++});
+ assert.equal(await p.init('a'),false);p.set('mt_watch_v2',[]);await p.flush();assert.equal(writes,0);assert.equal(p.ready,true);
 });
 test('remote settings restored; mutable reads cannot silently alter storage',async()=>{
  const p=new Preferences({storage:storage(),read:async()=>[{key:'mt_watch_v2',value:['BMNR']},{key:'mt_chart_interval',value:'60'},{key:'mt_chart_indicator',value:'MA100_200'}],write:async()=>{}});

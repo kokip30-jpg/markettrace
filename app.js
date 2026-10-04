@@ -9,13 +9,14 @@
   const accountLanguage=STORE.get('mt_language',window.MTI18n.lang());
   if(accountLanguage!==window.MTI18n.lang()){window.MTI18n.set(accountLanguage);location.reload();return;}
   const languageSelect=$('#languageSelect');languageSelect.value=window.MTI18n.lang();languageSelect.addEventListener('change',async()=>{STORE.set('mt_language',languageSelect.value);window.MTI18n.set(languageSelect.value);await STORE.flush?.();location.reload();});
+  const screenerSettings=STORE.get('mt_screener_v1', {filter:'all',sort:'volume'});
   const state = {
     market: [], marketMeta: {}, byTicker: new Map(),
     watch: STORE.get('mt_watch_v2', ['NVDA','AAPL','MSFT','AMZN','TSLA','AMD']),
     portfolio: STORE.get('mt_port_v2', []),
     view: 'overview', selected: null, insiderMode: 'buys', insiderData: {}, insiderQuery: '', insiderSort: 'date', insiderLimit: 40, gurus: [], guruMode: 'all', guruQuery: '', chartInterval: STORE.get('mt_chart_interval','5'), chartIndicator: STORE.get('mt_chart_indicator','VOL'), detailBars: [], detailIntraday: [], detailHourly: [], chart: null,
     compare: STORE.get('mt_compare_v1', ['NVDA','AMD','INTC']), compareRequest: 0, stockLimit: 50, insiderSignals: new Map(), guruSignals: new Map(), fundamentalPeriod: 'quarterly', detailFundamentals: null,
-    watchGroups: STORE.get('mt_watch_groups_v1', {}), stockNotes: STORE.get('mt_stock_notes_v1', {}), screener: STORE.get('mt_screener_v1', {filter:'all',sort:'volume'}), decisionLog: STORE.get('mt_decision_log_v1', []), tradePlans: STORE.get('mt_trade_plans_v1', {}), portfolioHistory: STORE.get('mt_portfolio_history_v1', []), portfolioTargets: STORE.get('mt_portfolio_targets_v1', {}),
+    watchGroups: STORE.get('mt_watch_groups_v1', {}), stockNotes: STORE.get('mt_stock_notes_v1', {}), screener: screenerSettings, earningsMode:['watch','all'].includes(screenerSettings.earningsMode)?screenerSettings.earningsMode:'watch', decisionLog: STORE.get('mt_decision_log_v1', []), tradePlans: STORE.get('mt_trade_plans_v1', {}), portfolioHistory: STORE.get('mt_portfolio_history_v1', []), portfolioTargets: STORE.get('mt_portfolio_targets_v1', {}),
   };
   const cache = new Map();
   const esc = v => String(v ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
@@ -49,12 +50,12 @@
   function setView(view) {
     state.view=view;
     $$('.view').forEach(el=>el.classList.toggle('active',el.id===`view-${view}`));
-    $$('.main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
+    $$('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));
     if(view==='insiders') loadInsiders(); if(view==='gurus') loadGurus(); if(view==='compare') renderCompare(); if(view==='portfolio') renderPortfolio();
     if(view!=='detail') location.hash = view==='overview'?'prehled':view;
     window.scrollTo({top:0,behavior:'smooth'});
   }
-  $$('.main-nav button').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
+  $$('[data-view]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.view)));
   $$('[data-jump]').forEach(b=>b.addEventListener('click',()=>setView(b.dataset.jump)));
   $('#backBtn').addEventListener('click',()=>setView('overview'));
 
@@ -104,6 +105,17 @@
     const leaders=[...rows].sort((a,b)=>scoreStock(b)-scoreStock(a)).slice(0,3),down=[...rows].sort((a,b)=>(a.change||0)-(b.change||0))[0],watchSignals=rows.filter(s=>state.watch.includes(s.ticker)&&((s.rel_volume||0)>=1.5||Math.abs(s.change||0)>=2||scoreStock(s)>=70));
     box.innerHTML=`<div class="brief-head"><div><p class="eyebrow">${tr('DNEŠNÍ RADAR')}</p><h2>${tr('Začít tady')}</h2></div><small>${tr('Seřazeno podle aktuálního MarketTrace skóre a aktivity')}</small></div><div class="brief-cards"><article><span>${tr('Nejzajímavější dnes')}</span>${leaders.map(s=>`<button data-open="${esc(s.ticker)}"><b>${esc(s.ticker)}</b><small class="${clsFor(s.ticker,s.change)}">${pct(s.change)} · ${scoreStock(s)}/100</small></button>`).join('')}</article><article><span>${tr('Rizikový pohyb')}</span><button data-open="${esc(down.ticker)}"><b>${esc(down.ticker)}</b><small class="down">${pct(down.change)} · ${tr('zkontroluj zprávy a objem')}</small></button></article><article><span>${tr('Watchlist vyžaduje pozornost')}</span><b>${watchSignals.length}</b><small>${tr(watchSignals.length?'titulů má dnes silnější signál':'bez výrazného signálu')}</small></article></div>`;
   }
+  function renderMarketRegime(){
+    const box=$('#marketRegime');if(!box)return;
+    const spy=state.byTicker.get('SPY'),qqq=state.byTicker.get('QQQ'),iwm=state.byTicker.get('IWM'),vix=state.byTicker.get('VIX');
+    const movers=[spy,qqq,iwm].filter(Boolean),avg=movers.length?movers.reduce((sum,row)=>sum+(Number(row.change)||0),0)/movers.length:null,vixMove=Number(vix?.change);
+    if(avg===null){box.innerHTML=`<div class="empty-state">${tr('Tržní režim se připravuje.')}</div>`;return;}
+    const tone=avg>=0.35&&(!Number.isFinite(vixMove)||vixMove<=1)?'on':avg<=-0.35||(Number.isFinite(vixMove)&&vixMove>=3)?'off':'neutral';
+    const label=tone==='on'?'Risk-on':tone==='off'?'Risk-off':'Neutrální';
+    const note=tone==='on'?'Indexy a šířka trhu podporují rizikovější pozice.':tone==='off'?'Trh zvyšuje opatrnost; preferuj menší riziko a jasné stop-lossy.':'Signály trhu nejsou ve shodě; vybírej selektivně a nepředbíhej potvrzení.';
+    const chip=(name,row,invert=false)=>row?`<span><b>${name}</b> <em class="${cls(invert?-Number(row.change):row.change)}">${pct(row.change)}</em></span>`:'';
+    box.innerHTML=`<div class="regime-body ${tone}"><div class="regime-verdict"><span>${tr('Dnešní režim')}</span><b>${tr(label)}</b><small>${tr(note)}</small></div><div class="regime-metrics">${chip('S&P 500',spy)}${chip('Nasdaq',qqq)}${chip('Russell 2000',iwm)}${chip('VIX',vix,true)}</div></div>`;
+  }
   function todayReason(s){
     const parts=[];if(Number(s.rel_volume)>=1.5)parts.push(`${tr('RVOL')} ${rel(s.rel_volume)}`);if(Math.abs(Number(s.change))>=2)parts.push(`${tr('Denní pohyb')} ${pct(s.change)}`);if(scoreStock(s)>=70)parts.push(`${tr('Skóre')} ${scoreStock(s)}/100`);if(state.insiderSignals.get(s.ticker)?.count)parts.push(tr('insider nákup'));return parts.slice(0,2).join(' · ')||tr('silný souhrnný signál');
   }
@@ -123,8 +135,10 @@
   }
   async function renderEarnings(){
     const box=$('#earningsCalendar');if(!box)return;
-    try{const feed=await data('earnings.json',true),watched=new Set(state.watch),items=(feed.items||[]).filter(x=>watched.has(x.ticker)).slice(0,8);box.innerHTML=items.length?items.map(x=>`<button class="compact-item earnings-item" data-open="${esc(x.ticker)}"><span class="badge buy">${esc(x.ticker)}</span><div><b>${esc(x.name||x.ticker)}</b><small>${date(x.date)}${x.time?` · ${esc(x.time)}`:''}${x.estimate?` · EPS ${esc(x.estimate)}`:''}</small></div><strong>${tr('Výsledky')}</strong></button>`).join(''):`<div class="empty-state">${tr('Pro sledované tituly zatím nejsou dostupné výsledky na příštích 7 dní.')}</div>`;}catch{box.innerHTML=`<div class="empty-state">${tr('Výsledkový kalendář se právě připravuje.')}</div>`;}
+    try{const feed=await data('earnings.json',true),watched=new Set(state.watch),listed=new Set(state.market.map(x=>x.ticker)),items=(feed.items||[]).filter(x=>state.earningsMode==='watch'?watched.has(x.ticker):listed.has(x.ticker)).slice(0,8);box.innerHTML=items.length?items.map(x=>`<button class="compact-item earnings-item" data-open="${esc(x.ticker)}"><span class="badge buy">${esc(x.ticker)}</span><div><b>${esc(x.name||x.ticker)}</b><small>${date(x.date)}${x.time?` · ${esc(x.time)}`:''}${x.estimate?` · EPS ${esc(x.estimate)}`:''}</small></div><strong>${tr('Výsledky')}</strong></button>`).join(''):`<div class="empty-state">${tr(state.earningsMode==='watch'?'Pro sledované tituly zatím nejsou dostupné výsledky na příštích 7 dní.':'V příštích 7 dnech nejsou v přehledu potvrzené výsledky.')}</div>`;}catch{box.innerHTML=`<div class="empty-state">${tr('Výsledkový kalendář se právě připravuje.')}</div>`;}
   }
+  $('#earningsFilter')?.addEventListener('click',e=>{const b=e.target.closest('[data-earnings-mode]');if(!b)return;state.earningsMode=b.dataset.earningsMode;state.screener={...state.screener,earningsMode:state.earningsMode};STORE.set('mt_screener_v1',state.screener);$$('#earningsFilter button').forEach(x=>x.classList.toggle('active',x===b));renderEarnings();});
+  $$('#earningsFilter button').forEach(x=>x.classList.toggle('active',x.dataset.earningsMode===state.earningsMode));
   function renderAgenda(){
     const box=$('#watchAgenda');if(!box||!state.market.length)return;
     const picks=state.watch.map(t=>state.byTicker.get(t)).filter(Boolean).map(s=>({s,score:scoreStock(s),urgent:(s.rel_volume||0)>=1.5||Math.abs(s.change||0)>=2})).filter(x=>x.urgent||x.score>=65).sort((a,b)=>(Number(b.urgent)-Number(a.urgent))||b.score-a.score).slice(0,5);
@@ -373,7 +387,7 @@
 
   async function boot(){
     $('#portfolioDate').value=new Date().toISOString().slice(0,10);renderWatch();
-    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?tr('Poslední dostupná data'):tr('Data připojena');$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderBrief();renderTodayWatch();renderMacroNews();renderEarnings();renderHeatmap();renderMetrics();renderAgenda();renderStocks();renderHighlights();renderPortfolio();renderAlerts();void refreshSetupAlerts();
+    try{const [m,meta]=await Promise.all([data('market.json',true),data('meta.json',true).catch(()=>({}))]);state.marketMeta=m;state.market=(m.symbols||[]).map(s=>({...s,score:scoreStock(s)}));state.byTicker=new Map(state.market.map(s=>[s.ticker,s]));const age=Date.now()-new Date(m.updated).getTime(),stale=age>45*60000;$('#feedStatus').className=`feed-status ${stale?'stale':'live'}`;$('#feedStatus b').textContent=stale?tr('Poslední dostupná data'):tr('Data připojena');$('#updatedAt').textContent=`Poslední aktualizace ${dateTime(m.updated)} · zpoždění přibližně ${m.delay||15} min`;renderSourceFreshness(meta,m);renderWatch();renderPulse();renderBrief();renderMarketRegime();renderTodayWatch();renderMacroNews();renderEarnings();renderHeatmap();renderMetrics();renderAgenda();renderStocks();renderHighlights();renderPortfolio();renderAlerts();void refreshSetupAlerts();
     }catch(e){$('#feedStatus').className='feed-status error';$('#feedStatus b').textContent='Data nejsou dostupná';$('#stockRows').innerHTML='<tr><td colspan="8"><div class="empty-state">Tržní snapshot se právě připravuje. Zkus stránku obnovit za několik minut.</div></td></tr>';console.error(e);}
     applyRoute();
   }

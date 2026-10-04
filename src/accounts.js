@@ -5,18 +5,24 @@ const client=createClient('https://rftgfskqvyhdgirhwmvm.supabase.co','sb_publish
   global:{fetch:(url,options={})=>fetch(url,{...options,signal:options.signal||AbortSignal.timeout(15000)})}
 });
 const $=s=>document.querySelector(s);
-const status=text=>{$('#accountStatus').textContent=text;};
+const tr=text=>window.MTI18n?.text(text)||text;
+const status=text=>{$('#accountStatus').textContent=tr(text);};
 const prefs=new Preferences({
   storage:window.localStorage,status,
   read:async user=>{const {data,error}=await client.from('user_preferences').select('key,value').eq('user_id',user);if(error)throw error;return data;},
   write:async(user,batch)=>{const {error}=await client.from('user_preferences').upsert(Object.entries(batch).map(([key,value])=>({user_id:user,key,value})),{onConflict:'user_id,key'});if(error)throw error;}
 });
 const dialog=$('#accountDialog');
+let leaving=false;
 $('#accountBtn').onclick=()=>dialog.showModal();
 $('#accountClose').onclick=()=>dialog.close();
-$('#accountRetry').onclick=async()=>{if(!prefs.ready)location.reload();else await prefs.flush();};
+$('#accountRetry').onclick=async()=>{
+  if(!prefs.ready){location.reload();return;}
+  const loaded=await prefs.reload();
+  if(loaded) await prefs.flush();
+};
 $('#accountForm').onsubmit=async e=>{
-  e.preventDefault();const submit=$('#accountSubmit');submit.disabled=true;$('#accountMessage').textContent='Přihlašuji…';
+  e.preventDefault();const submit=$('#accountSubmit');submit.disabled=true;$('#accountMessage').textContent=tr('Přihlašuji…');
   const name=$('#accountName').value.trim().toLowerCase();
   // Krátké jméno je interně samostatný účet; zadaný e-mail zůstává e-mailem.
   const email=name.includes('@')?name:`${name}@accounts.markettrace.invalid`;
@@ -29,10 +35,10 @@ $('#accountForm').onsubmit=async e=>{
     // Rozlišíme jen chybný údaj od nedostupného spojení, bez úniku detailů účtu.
     const message=String(err?.message||'').toLowerCase();
     $('#accountMessage').textContent=message.includes('invalid login credentials')
-      ? 'Přihlášení se nezdařilo. Zkontroluj přihlašovací jméno a heslo.'
+      ? tr('Přihlášení se nezdařilo. Zkontroluj přihlašovací jméno a heslo.')
       : message.includes('fetch') || message.includes('network') || message.includes('timeout')
-        ? 'Přihlášení se nezdařilo kvůli spojení. Zkus to prosím znovu.'
-        : 'Přihlášení se nezdařilo. Zkontroluj údaje a připojení.';
+        ? tr('Přihlášení se nezdařilo kvůli spojení. Zkus to prosím znovu.')
+        : tr('Přihlášení se nezdařilo. Zkontroluj údaje a připojení.');
   }
   finally{submit.disabled=false;}
 };
@@ -40,9 +46,10 @@ $('#accountLogout').onclick=async()=>{
   // Odhlášení nesmí zůstat uvězněné kvůli dočasně neuloženým změnám.
   // Fronta zůstává bezpečně v tomto prohlížeči a zkusí se uložit po dalším přihlášení.
   const saved=await prefs.flush();
-  if(!saved)$('#accountMessage').textContent='Změny se nyní nepodařilo uložit; odhlašuji bezpečně. Při dalším přihlášení se zkusí uložit znovu.';
+  if(!saved)$('#accountMessage').textContent=tr('Změny se nyní nepodařilo uložit; odhlašuji bezpečně. Při dalším přihlášení se zkusí uložit znovu.');
+  leaving=true;
   const {error}=await client.auth.signOut({scope:'local'});
-  if(error){$('#accountMessage').textContent='Odhlášení se nezdařilo. Zkus to znovu.';return;}
+  if(error){$('#accountMessage').textContent=tr('Odhlášení se nezdařilo. Zkus to znovu.');return;}
   location.reload();
 };
 async function init(){
@@ -56,30 +63,31 @@ async function init(){
       document.body.classList.add('auth-required');
       $('#accountBtn').textContent='Přihlásit';
       $('#accountForm').hidden=false;$('#accountLogout').hidden=true;
-      $('#accountIdentity').textContent='Přihlas se pro přístup k MarketTrace.';
+      $('#accountIdentity').textContent=tr('Přihlas se pro přístup k MarketTrace.');
       status('Přístup vyžaduje přihlášení');
       dialog.showModal();
       return null;
     }
-    await prefs.init(user?.id||null);
+    const loaded=await prefs.init(user?.id||null);
     document.body.classList.remove('auth-pending','auth-required');
     $('#accountBtn').textContent='Můj účet';
     $('#accountForm').hidden=true;$('#accountLogout').hidden=false;
     const username=user?.email?.endsWith('@accounts.markettrace.invalid')?user.email.split('@')[0]:user?.email;
-    $('#accountIdentity').textContent=user?'Účet: '+username:'Přihlas se a ukládej nastavení do svého účtu.';
+    $('#accountIdentity').textContent=user?`${tr('Účet')}: ${username}`:tr('Přihlas se a ukládej nastavení do svého účtu.');
     $('#accountRetry').hidden=false;
+    if(!loaded) $('#accountMessage').textContent=tr('Přihlášení je v pořádku, ale uložená nastavení se zatím nepodařilo načíst. Zkus to za chvíli znovu.');
     client.auth.onAuthStateChange((event,session)=>{
       if(event!=='INITIAL_SESSION' && (session?.user?.id||null)!==(user?.id||null)) location.reload();
     });
     void prefs.flush();
     return prefs;
   } catch {
-    status('Účet se nepodařilo načíst');$('#accountMessage').textContent='Aby se nepřepsalo uložené nastavení, počkáme na spojení. Zkus načtení znovu.';
+    status('Účet se nepodařilo načíst');$('#accountMessage').textContent=tr('Aby se nepřepsalo uložené nastavení, počkáme na spojení. Zkus načtení znovu.');
     $('#accountRetry').hidden=false;dialog.showModal();
     throw new Error('Account preferences could not be loaded');
   }
 }
 window.MTAccounts={ready:init(),client};
 window.addEventListener('online',()=>void prefs.flush());
-window.addEventListener('beforeunload',e=>{if(prefs.dirty()){e.preventDefault();e.returnValue='';}});
+window.addEventListener('beforeunload',e=>{if(!leaving&&prefs.dirty()){e.preventDefault();e.returnValue='';}});
 setInterval(()=>{if(prefs.dirty())void prefs.flush();},15000);
