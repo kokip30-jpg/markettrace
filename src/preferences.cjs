@@ -16,7 +16,7 @@ function valid(k,v) {
     case 'mt_trade_plans_v1': return v&&typeof v==='object'&&Object.keys(v).length<=500&&Object.entries(v).every(([ticker,p])=>symbol(ticker)&&p&&typeof p==='object'&&['entry','stop','target'].every(k=>p[k]===null||Number.isFinite(p[k])&&p[k]>0)&&typeof p.thesis==='string'&&p.thesis.length<=600&&typeof p.horizon==='string'&&p.horizon.length<=30&&typeof p.updated==='string');
     case 'mt_portfolio_history_v1': return Array.isArray(v)&&v.length<=365&&v.every(x=>x&&/^\d{4}-\d{2}-\d{2}$/.test(x.date)&&Number.isFinite(x.value)&&x.value>=0&&Number.isFinite(x.spy)&&x.spy>0);
     case 'mt_portfolio_targets_v1': return v&&typeof v==='object'&&Object.keys(v).length<=500&&Object.entries(v).every(([ticker,target])=>symbol(ticker)&&Number.isFinite(target)&&target>=0&&target<=100);
-    case 'mt_alerts': return Array.isArray(v) && v.length<=100 && v.every(a=>a&&symbol(a.t)&&['price','rvol','move','score'].includes(a.type||'price')&&['above','below'].includes(a.dir)&&Number.isFinite(a.v)&&a.v>0);
+    case 'mt_alerts': return Array.isArray(v) && v.length<=100 && v.every(a=>a&&symbol(a.t)&&['price','rvol','move','score','setup'].includes(a.type||'price')&&['above','below'].includes(a.dir)&&((a.type||'price')==='setup'||(Number.isFinite(a.v)&&a.v>0)));
     case 'mt_screener_v1': return v && typeof v==='object' &&
       ['all','unusual','strong-volume','gainers','losers','insider','high-score','near-high','watch','assets'].includes(v.filter) &&
       ['volume','relative','change','score','yearPosition'].includes(v.sort);
