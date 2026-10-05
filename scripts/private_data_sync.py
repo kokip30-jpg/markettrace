@@ -5,6 +5,7 @@ GitHub Actions authenticates with its short-lived OIDC identity; no storage or
 Supabase secret is ever placed in the repository or in the browser.
 """
 from __future__ import annotations
+from concurrent.futures import ThreadPoolExecutor
 import hashlib, json, os, sys, urllib.request
 from pathlib import Path
 
@@ -82,9 +83,13 @@ def download(root: Path):
     state = {}
     for group in chunks(listing):
         signed = api("download", {"paths": group})["downloads"]
-        for path in group:
+        def fetch_one(path):
             with urllib.request.urlopen(signed[path], timeout=120) as response:
-                body = response.read()
+                return path, response.read()
+        # Stahování stovek malých JSON souborů po jednom tvořilo většinu běhu.
+        # Všechny zápisy míří do odlišných souborů, proto je bezpečné je paralelizovat.
+        with ThreadPoolExecutor(max_workers=12) as pool:
+            for path, body in pool.map(fetch_one, group):
                 target = root / path; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(body)
                 state[path] = hashlib.sha256(body).hexdigest()
     save_state(root, state)
