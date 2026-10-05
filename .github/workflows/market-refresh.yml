@@ -2,7 +2,10 @@ name: Rychlá aktualizace tržních dat
 
 on:
   schedule:
-    - cron: '*/5 * * * 1-5'
+    # Zdroj cen má přibližně 15minutové zpoždění. Častější stahování stejná
+    # data jen opakovaně přenášelo do Supabase a vyčerpávalo bezplatnou kvótu.
+    # 08:00–22:59 UTC pokrývá evropské ráno, americký premarket i seanci.
+    - cron: '*/15 8-22 * * 1-5'
   workflow_dispatch:
 
 permissions:
