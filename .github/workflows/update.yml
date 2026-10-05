@@ -1,18 +1,16 @@
-name: Data SEC a nasazení webu
+name: Pomalá data SEC a fundamenty
 
 on:
   schedule:
-    - cron: '*/5 * * * 1-5'     # rychlé ceny a grafy každých 5 minut
     - cron: '27 */2 * * 1-5'    # SEC, 13F a fundamenty každé 2 hodiny
     - cron: '27 */4 * * 0,6'    # o víkendu plná aktualizace každé 4 hodiny
   workflow_dispatch:
 permissions:
-  contents: write
-  pages: write
+  contents: read
   id-token: write
 
 concurrency:
-  group: markettrace
+  group: markettrace-full-data
   cancel-in-progress: false
 
 jobs:
@@ -47,54 +45,10 @@ jobs:
           ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
           NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
           SEC_USER_AGENT: ${{ secrets.SEC_USER_AGENT }}
-        run: |
-          if [[ "${{ github.event_name }}" == "schedule" && "${{ github.event.schedule }}" == "*/5 * * * 1-5" ]]; then
-            python scripts/update.py --market-only
-          else
-            python scripts/update.py
-          fi
+        run: python scripts/update.py
 
       - name: Ověřit úplnost dat
         run: python scripts/validate_data.py
 
       - name: Uložit data do privátního úložiště
         run: python scripts/private_data_sync.py upload data
-
-      - name: Odstranit veřejný snapshot z větve data
-        env:
-          TOKEN: ${{ github.token }}
-          REPO: ${{ github.repository }}
-        run: |
-          tmp=$(mktemp -d)
-          cd "$tmp"
-          git init -q -b data
-          printf 'MarketTrace data are served only to authenticated users.\n' > README.md
-          git add README.md
-          git -c user.name="markettrace-bot" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" commit -q -m "Retire public market snapshots"
-          git push -q -f "https://x-access-token:${TOKEN}@github.com/${REPO}.git" data
-
-      - uses: actions/configure-pages@v5
-
-      - name: Připravit neveřejný artefakt pro Pages
-        run: |
-          site=$(mktemp -d)
-          rsync -a --delete --exclude data --exclude .git ./ "$site/"
-          echo "PAGES_SITE=$site" >> "$GITHUB_ENV"
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: ${{ env.PAGES_SITE }}
-
-      - id: deploy
-        uses: actions/deploy-pages@v4
-        continue-on-error: true
-
-      - name: Druhý pokus o zveřejnění (výpadek GitHub Pages)
-        if: steps.deploy.outcome == 'failure'
-        run: sleep 45
-
-      - if: steps.deploy.outcome == 'failure'
-        uses: actions/deploy-pages@v4
-
-      - name: Ověřit zveřejněný web
-        run: python scripts/validate_data.py --base-url "https://kokip30-jpg.github.io/markettrace/"

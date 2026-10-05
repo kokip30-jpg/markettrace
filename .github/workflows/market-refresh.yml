@@ -1,0 +1,46 @@
+name: Rychlá aktualizace tržních dat
+
+on:
+  schedule:
+    - cron: '*/5 * * * 1-5'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# Rychlé ceny se nesmí řadit za SEC a Pages deploy. Jeden běh dokončíme,
+# aby nikdy neodešel rozpracovaný soukromý snapshot.
+concurrency:
+  group: markettrace-fast-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Načíst chráněný snapshot
+        run: |
+          mkdir -p data
+          python scripts/private_data_sync.py download data
+
+      - name: Obnovit ceny a minutové grafy
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+        run: python scripts/update.py --market-only
+
+      - name: Ověřit úplnost dat
+        run: python scripts/validate_data.py
+
+      - name: Uložit jen změněná data do soukromého úložiště
+        run: python scripts/private_data_sync.py upload data

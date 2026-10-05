@@ -5,10 +5,11 @@ GitHub Actions authenticates with its short-lived OIDC identity; no storage or
 Supabase secret is ever placed in the repository or in the browser.
 """
 from __future__ import annotations
-import json, os, sys, urllib.request
+import hashlib, json, os, sys, urllib.request
 from pathlib import Path
 
 BASE = "https://rftgfskqvyhdgirhwmvm.supabase.co/functions/v1/market-ingest"
+SYNC_STATE = ".markettrace-sync.json"
 
 def oidc_token():
     request = urllib.request.Request(
@@ -30,9 +31,37 @@ def api(action, payload=None):
 def chunks(values, size=80):
     for i in range(0, len(values), size): yield values[i:i + size]
 
+def state_path(root: Path):
+    return root / SYNC_STATE
+
+def load_state(root: Path):
+    try:
+        return json.loads(state_path(root).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+def save_state(root: Path, state):
+    state_path(root).write_text(json.dumps(state, separators=(",", ":")), encoding="utf-8")
+
+def data_hash(path: Path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+def local_hashes(root: Path):
+    return {
+        path.relative_to(root).as_posix(): data_hash(path)
+        for path in root.rglob("*.json")
+        if path.name != SYNC_STATE
+    }
+
 def upload(root: Path):
-    paths = sorted(p.relative_to(root).as_posix() for p in root.rglob("*.json"))
-    if not paths: raise RuntimeError("No market data to upload")
+    current = local_hashes(root)
+    previous = load_state(root)
+    paths = sorted(path for path, digest in current.items() if previous.get(path) != digest)
+    if not current:
+        raise RuntimeError("No market data to upload")
+    if not paths:
+        print(f"Private Supabase storage unchanged: {len(current)} files")
+        return
     for group in chunks(paths):
         signed = api("sign", {"paths": group})["uploads"]
         for path in group:
@@ -42,18 +71,23 @@ def upload(root: Path):
             request = urllib.request.Request(url, data=(root / path).read_bytes(), method="PUT",
                 headers={"Content-Type": "application/json", "x-upsert": "true"})
             with urllib.request.urlopen(request, timeout=120): pass
-    print(f"Private Supabase storage updated: {len(paths)} files")
+    save_state(root, current)
+    print(f"Private Supabase storage updated: {len(paths)} changed files ({len(current)} total)")
 
 def download(root: Path):
     listing = api("list").get("files", [])
     if not listing:
         print("No private snapshot yet; first run will seed it.")
         return False
+    state = {}
     for group in chunks(listing):
         signed = api("download", {"paths": group})["downloads"]
         for path in group:
             with urllib.request.urlopen(signed[path], timeout=120) as response:
-                target = root / path; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(response.read())
+                body = response.read()
+                target = root / path; target.parent.mkdir(parents=True, exist_ok=True); target.write_bytes(body)
+                state[path] = hashlib.sha256(body).hexdigest()
+    save_state(root, state)
     print(f"Private Supabase storage restored: {len(listing)} files")
     return True
 
