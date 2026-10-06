@@ -1472,8 +1472,16 @@ def build_options_snapshot(meta, symbols):
                 continue
             score, probability = _option_score(short['delta'], credit, width, short.get('oi'))
             ideas.append(clean({'ticker': symbol, 'strategy': 'Bull Put Credit Spread', 'expiry': short['expiry'],
-                                'short_strike': short['strike'], 'long_strike': long['strike'],
-                                'credit': round(credit * 100, 2), 'max_risk': round((width - credit) * 100, 2),
+                                'underlying_price': round(spot, 2), 'short_strike': short['strike'], 'long_strike': long['strike'],
+                                'short_contract': short['contract'], 'long_contract': long['contract'],
+                                'short_bid': short.get('bid'), 'short_ask': short.get('ask'), 'short_mid': short.get('mid'),
+                                'short_delta': short.get('delta'), 'short_open_interest': short.get('oi'),
+                                'long_bid': long.get('bid'), 'long_ask': long.get('ask'), 'long_mid': long.get('mid'),
+                                'long_delta': long.get('delta'), 'long_open_interest': long.get('oi'),
+                                'credit': round(credit * 100, 2), 'credit_per_share': round(credit, 2),
+                                'max_profit': round(credit * 100, 2), 'max_risk': round((width - credit) * 100, 2),
+                                'spread_width': round(width, 2), 'return_on_risk': round(credit / (width - credit) * 100, 1),
+                                'dte': (datetime.fromisoformat(short['expiry']).date() - TODAY).days,
                                 'break_even': round(short['strike'] - credit, 2), 'probability': probability,
                                 'score': score, 'iv': short.get('iv'), 'source': 'Alpaca indicative'}))
         # Covered call: OTM call s deltou okolo +0.25. Riziko akcií se záměrně nepočítá jako omezené.
@@ -1481,7 +1489,14 @@ def build_options_snapshot(meta, symbols):
         for call in sorted(candidates, key=lambda r: abs(r['delta'] - .25))[:2]:
             score, probability = _option_score(call['delta'], call['bid'], None, call.get('oi'))
             ideas.append(clean({'ticker': symbol, 'strategy': 'Covered Call', 'expiry': call['expiry'],
-                                'short_strike': call['strike'], 'credit': round(call['bid'] * 100, 2),
+                                'underlying_price': round(spot, 2), 'short_strike': call['strike'],
+                                'short_contract': call['contract'], 'short_bid': call.get('bid'),
+                                'short_ask': call.get('ask'), 'short_mid': call.get('mid'),
+                                'short_delta': call.get('delta'), 'short_open_interest': call.get('oi'),
+                                'credit': round(call['bid'] * 100, 2), 'credit_per_share': round(call['bid'], 2),
+                                'max_profit': round(call['bid'] * 100, 2), 'dte': (datetime.fromisoformat(call['expiry']).date() - TODAY).days,
+                                'upside_to_strike': round((call['strike'] / spot - 1) * 100, 1),
+                                'return_if_called': round((call['strike'] - spot + call['bid']) / spot * 100, 1),
                                 'max_risk': 'Vlastněné akcie', 'break_even': round(spot - call['bid'], 2),
                                 'probability': probability, 'score': score, 'iv': call.get('iv'),
                                 'source': 'Alpaca indicative'}))
