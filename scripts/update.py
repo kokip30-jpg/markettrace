@@ -1378,6 +1378,127 @@ def update_alpaca(meta, symbols):
     save('ext.json', {'updated': iso(now), 'delay': 15, 'sym': ext})
 
 
+# ---------------------------------------------------------------- opční nápady (Alpaca, pouze veřejný výstup)
+def _option_symbol_parts(symbol):
+    """Vrátí expiraci, typ a strike z OCC symbolu vráceného Alpaca API."""
+    symbol = str(symbol or '').removeprefix('O:')
+    m = re.search(r'(\d{6})([CP])(\d{8})$', symbol)
+    if not m:
+        return None
+    try:
+        expiry = datetime.strptime(m.group(1), '%y%m%d').date()
+        return expiry, m.group(2), int(m.group(3)) / 1000
+    except ValueError:
+        return None
+
+
+def _option_num(obj, key):
+    try:
+        value = obj.get(key)
+        return float(value) if value is not None else None
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def alpaca_option_chain(symbol, contract_type):
+    """Načte omezený, zpožděný řetězec bez zveřejnění přístupových údajů."""
+    today = datetime.now(timezone.utc).date()
+    q = {
+        'feed': 'indicative', 'type': contract_type, 'limit': 1000,
+        'expiration_date_gte': (today + timedelta(days=7)).isoformat(),
+        'expiration_date_lte': (today + timedelta(days=45)).isoformat(),
+    }
+    raw = http('https://data.alpaca.markets/v1beta1/options/snapshots/' + urllib.parse.quote(symbol) + '?' + urllib.parse.urlencode(q),
+               headers={'APCA-API-KEY-ID': AK, 'APCA-API-SECRET-KEY': AS,
+                        'Accept': 'application/json'})
+    if not raw:
+        return []
+    try:
+        snapshots = (json.loads(raw).get('snapshots') or {})
+    except ValueError:
+        return []
+    rows = []
+    for contract, snapshot in snapshots.items():
+        parts = _option_symbol_parts(contract)
+        if not parts:
+            continue
+        expiry, right, strike = parts
+        quote, trade, greeks = (snapshot.get('latestQuote') or {}), (snapshot.get('latestTrade') or {}), (snapshot.get('greeks') or {})
+        bid, ask = _option_num(quote, 'bp'), _option_num(quote, 'ap')
+        last = _option_num(trade, 'p')
+        mid = ((bid + ask) / 2) if bid is not None and ask is not None and ask > 0 else last
+        delta = _option_num(greeks, 'delta')
+        if mid is None or mid <= 0 or delta is None:
+            continue
+        rows.append({'contract': contract, 'expiry': expiry.isoformat(), 'right': right, 'strike': strike,
+                     'bid': bid, 'ask': ask, 'mid': mid, 'delta': delta,
+                     'iv': _option_num(snapshot, 'impliedVolatility'),
+                     'oi': _option_num(snapshot, 'openInterest')})
+    return rows
+
+
+def _option_score(delta, credit, width=None, oi=None):
+    probability = round(max(0.0, min(0.99, 1 - abs(delta))) * 100)
+    liquidity = min(10, int((oi or 0) / 1000))
+    reward = min(15, int((credit / width) * 100 / 3)) if width else min(12, int(credit * 2))
+    return min(99, max(40, probability + liquidity + reward)), probability
+
+
+def build_options_snapshot(meta, symbols):
+    """Vytvoří malý anonymní feed kandidátních strategií pro OptionScope.
+
+    Do výstupu se nikdy nedostane API klíč, celý řetězec ani informace o účtu.
+    """
+    if not (AK and AS):
+        return
+    prices = load('ext.json', {}).get('sym', {})
+    ideas = []
+    for symbol in [s for s in symbols if s in {'SPY', 'AAPL', 'NVDA', 'TSLA', 'QQQ'}]:
+        spot = _option_num(prices.get(symbol, {}), 'p')
+        if not spot:
+            continue
+        puts = alpaca_option_chain(symbol, 'put')
+        calls = alpaca_option_chain(symbol, 'call')
+        # Credit put spread: short put s deltou zhruba -0.20 až -0.35 a ochranný put níž.
+        candidates = [p for p in puts if -0.36 <= p['delta'] <= -0.16 and p['strike'] < spot and p['bid']]
+        for short in sorted(candidates, key=lambda r: abs(abs(r['delta']) - .25))[:2]:
+            longs = [p for p in puts if p['expiry'] == short['expiry'] and p['strike'] < short['strike'] and p['ask']]
+            if not longs:
+                continue
+            long = min(longs, key=lambda r: abs((short['strike'] - r['strike']) - max(2.5, spot * .015)))
+            width = short['strike'] - long['strike']
+            credit = short['bid'] - long['ask']
+            if width <= 0 or credit <= 0 or credit >= width:
+                continue
+            score, probability = _option_score(short['delta'], credit, width, short.get('oi'))
+            ideas.append(clean({'ticker': symbol, 'strategy': 'Bull Put Credit Spread', 'expiry': short['expiry'],
+                                'short_strike': short['strike'], 'long_strike': long['strike'],
+                                'credit': round(credit * 100, 2), 'max_risk': round((width - credit) * 100, 2),
+                                'break_even': round(short['strike'] - credit, 2), 'probability': probability,
+                                'score': score, 'iv': short.get('iv'), 'source': 'Alpaca indicative'}))
+        # Covered call: OTM call s deltou okolo +0.25. Riziko akcií se záměrně nepočítá jako omezené.
+        candidates = [c for c in calls if .16 <= c['delta'] <= .36 and c['strike'] > spot and c['bid']]
+        for call in sorted(candidates, key=lambda r: abs(r['delta'] - .25))[:2]:
+            score, probability = _option_score(call['delta'], call['bid'], None, call.get('oi'))
+            ideas.append(clean({'ticker': symbol, 'strategy': 'Covered Call', 'expiry': call['expiry'],
+                                'short_strike': call['strike'], 'credit': round(call['bid'] * 100, 2),
+                                'max_risk': 'Vlastněné akcie', 'break_even': round(spot - call['bid'], 2),
+                                'probability': probability, 'score': score, 'iv': call.get('iv'),
+                                'source': 'Alpaca indicative'}))
+    ideas.sort(key=lambda row: (-row.get('score', 0), row.get('ticker', '')))
+    old = load('options/summary.json', {})
+    if ideas:
+        save('options/summary.json', {'updated': iso(datetime.now(timezone.utc)), 'delay': 15,
+                                      'source': 'Alpaca indicative', 'ideas': ideas[:30]})
+        meta['options_at'] = datetime.now(timezone.utc).isoformat()
+        log('Opce: kandidátů', len(ideas))
+    elif not old.get('ideas'):
+        save('options/summary.json', {'updated': None, 'delay': 15, 'source': 'Alpaca indicative', 'ideas': []})
+        log('Opce: zdroj zatím bez kandidátů')
+    else:
+        log('Opce: zdroj bez nových dat, ponechán poslední funkční snapshot')
+
+
 # ---------------------------------------------------------------- kryptoměny (Alpaca, bez zpoždění)
 def crypto_bars(pairs, timeframe, start):
     res, token = {}, None
@@ -2009,7 +2130,8 @@ def main():
     crypto_pairs = [p.upper() for p in CFG.get('crypto', [])]
     crypto_syms = [p.replace('/', '-') for p in crypto_pairs]
     all_symbols = market_symbols + crypto_syms + ['VIX']
-    for step in (lambda: update_alpaca(meta, market_symbols), lambda: update_crypto(meta, crypto_pairs),
+    for step in (lambda: update_alpaca(meta, market_symbols), lambda: build_options_snapshot(meta, market_symbols),
+                 lambda: update_crypto(meta, crypto_pairs),
                  lambda: update_vix(meta),
                  lambda: build_market_snapshot(all_symbols), lambda: update_fx(meta)):
         try:
