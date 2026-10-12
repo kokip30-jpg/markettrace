@@ -1,0 +1,36 @@
+name: Kontrola Alpaca scalperu
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'scalper/**'
+      - 'package.json'
+      - '.github/workflows/scalper-check.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Test strategie
+        run: npm --prefix scalper test
+      - name: Ověřit stejné paper klíče jako MarketTrace
+        env:
+          ALPACA_KEY: ${{ secrets.ALPACA_KEY }}
+          ALPACA_SECRET: ${{ secrets.ALPACA_SECRET }}
+        run: |
+          test -n "$ALPACA_KEY"
+          test -n "$ALPACA_SECRET"
+          curl --fail --silent --show-error \
+            -H "APCA-API-KEY-ID: $ALPACA_KEY" \
+            -H "APCA-API-SECRET-KEY: $ALPACA_SECRET" \
+            https://paper-api.alpaca.markets/v2/account >/dev/null

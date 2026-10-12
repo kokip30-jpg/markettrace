@@ -1,0 +1,12 @@
+{
+  "name": "alpaca-paper-scalper",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Oddeleny paper-trading scalping dashboard pro Alpaca.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": { "node": ">=22" }
+}

@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="cs"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Alpaca Paper Scalper</title><link rel="stylesheet" href="/styles.css"></head>
+<body><main>
+  <header><div><p class="eyebrow">ALPACA PAPER • SCALPING LAB</p><h1>Rychlé signály.<br><span>Tvrdé limity rizika.</span></h1></div><div class="top-actions"><span id="status" class="pill">Načítám…</span><button id="stop" class="danger">STOP</button></div></header>
+  <section id="warning" class="warning">Pouze paper trading. Systém neposkytuje investiční doporučení a negarantuje zisk.</section>
+  <section class="metrics" id="metrics"></section>
+  <section><div class="section-title"><div><p class="eyebrow">WATCHLIST</p><h2>Živé příležitosti</h2></div><span id="updated"></span></div><div id="symbols" class="cards"></div></section>
+  <section class="split"><div><p class="eyebrow">RIZIKO</p><h2>Aktivní ochrany</h2><div id="risk" class="risk-list"></div></div><div><p class="eyebrow">DENÍK</p><h2>Poslední události</h2><div id="events" class="events"></div></div></section>
+</main><dialog id="confirm"><form method="dialog"><p class="eyebrow">RUČNÍ POTVRZENÍ</p><h2 id="confirmTitle">Paper objednávka</h2><div id="confirmBody"></div><p>Zadejte <strong>PAPER</strong>:</p><input id="confirmText" autocomplete="off"><div class="dialog-actions"><button value="cancel">Zrušit</button><button id="send" value="default" class="primary">Odeslat do Alpaca Paper</button></div></form></dialog><script src="/app.js"></script></body></html>
