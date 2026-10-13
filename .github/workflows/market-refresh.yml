@@ -5,7 +5,7 @@ on:
     # Zdroj cen má přibližně 15minutové zpoždění. Aktualizujeme proto jen
     # během hlavní americké seance, po 30 minutách; mimo seanci by šlo
     # převážně o stejná data a zbytečnou spotřebu kvóty.
-    - cron: '*/30 13-21 * * 1-5'
+    - cron: '7,37 13-21 * * 1-5'
   workflow_dispatch:
 
 permissions:
