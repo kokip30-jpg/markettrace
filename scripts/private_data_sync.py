@@ -6,11 +6,31 @@ Supabase secret is ever placed in the repository or in the browser.
 """
 from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor
-import hashlib, json, os, sys, urllib.request
+import hashlib, json, os, sys, time, urllib.error, urllib.request
 from pathlib import Path
 
 BASE = "https://rftgfskqvyhdgirhwmvm.supabase.co/functions/v1/market-ingest"
 SYNC_STATE = ".markettrace-sync.json"
+
+
+def urlopen_with_retry(request, *, timeout, label, attempts=4):
+    """Retry transient storage/network failures without duplicating data.
+
+    Uploads use ``x-upsert`` and downloads are idempotent, so retrying an
+    individual request is safe. Supabase's occasional 520 responses are
+    gateway failures rather than an invalid snapshot or credential.
+    """
+    for attempt in range(attempts):
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            transient = isinstance(exc, urllib.error.URLError) or exc.code in {408, 429, 500, 502, 503, 504, 520, 522, 523, 524}
+            if not transient or attempt == attempts - 1:
+                raise
+            delay = 2 ** attempt
+            print(f"{label} failed ({exc}); retrying in {delay}s", flush=True)
+            time.sleep(delay)
+
 
 def oidc_token():
     request = urllib.request.Request(
@@ -20,20 +40,24 @@ def oidc_token():
     with urllib.request.urlopen(request, timeout=30) as response:
         return json.load(response)["value"]
 
+
 def api(action, payload=None):
     body = None if payload is None else json.dumps(payload).encode()
     request = urllib.request.Request(
         f"{BASE}?action={action}", data=body, method="POST",
         headers={"Authorization": "Bearer " + oidc_token(), "Content-Type": "application/json"},
     )
-    with urllib.request.urlopen(request, timeout=90) as response:
+    with urlopen_with_retry(request, timeout=90, label=f"Supabase {action}") as response:
         return json.load(response)
+
 
 def chunks(values, size=80):
     for i in range(0, len(values), size): yield values[i:i + size]
 
+
 def state_path(root: Path):
     return root / SYNC_STATE
+
 
 def load_state(root: Path):
     try:
@@ -41,11 +65,14 @@ def load_state(root: Path):
     except (OSError, ValueError):
         return {}
 
+
 def save_state(root: Path, state):
     state_path(root).write_text(json.dumps(state, separators=(",", ":")), encoding="utf-8")
 
+
 def data_hash(path: Path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
+
 
 def local_hashes(root: Path):
     return {
@@ -53,6 +80,7 @@ def local_hashes(root: Path):
         for path in root.rglob("*.json")
         if path.name != SYNC_STATE
     }
+
 
 def upload(root: Path):
     current = local_hashes(root)
@@ -71,9 +99,11 @@ def upload(root: Path):
                 url = "https://rftgfskqvyhdgirhwmvm.supabase.co/storage/v1" + url
             request = urllib.request.Request(url, data=(root / path).read_bytes(), method="PUT",
                 headers={"Content-Type": "application/json", "x-upsert": "true"})
-            with urllib.request.urlopen(request, timeout=120): pass
+            with urlopen_with_retry(request, timeout=120, label=f"Upload {path}"):
+                pass
     save_state(root, current)
     print(f"Private Supabase storage updated: {len(paths)} changed files ({len(current)} total)")
+
 
 def download(root: Path):
     listing = api("list").get("files", [])
@@ -84,7 +114,7 @@ def download(root: Path):
     for group in chunks(listing):
         signed = api("download", {"paths": group})["downloads"]
         def fetch_one(path):
-            with urllib.request.urlopen(signed[path], timeout=120) as response:
+            with urlopen_with_retry(signed[path], timeout=120, label=f"Download {path}") as response:
                 return path, response.read()
         # Stahování stovek malých JSON souborů po jednom tvořilo většinu běhu.
         # Všechny zápisy míří do odlišných souborů, proto je bezpečné je paralelizovat.
@@ -95,6 +125,7 @@ def download(root: Path):
     save_state(root, state)
     print(f"Private Supabase storage restored: {len(listing)} files")
     return True
+
 
 if __name__ == "__main__":
     root = Path(sys.argv[2] if len(sys.argv) > 2 else "data")
