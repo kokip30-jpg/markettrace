@@ -2,10 +2,10 @@ name: Rychlá aktualizace tržních dat
 
 on:
   schedule:
-    # Zdroj cen má přibližně 15minutové zpoždění. Aktualizujeme proto jen
-    # během hlavní americké seance, po 30 minutách; mimo seanci by šlo
-    # převážně o stejná data a zbytečnou spotřebu kvóty.
-    - cron: '7,37 13-21 * * 1-5'
+    # Zdroj cen má přibližně 15minutové zpoždění. Spouštíme obnovu každých
+    # deset minut během hlavní americké seance, mimo celé minuty, kdy GitHub
+    # plánované běhy častěji zpožďuje nebo vynechá.
+    - cron: '3,13,23,33,43,53 13-21 * * 1-5'
   workflow_dispatch:
 
 permissions:
